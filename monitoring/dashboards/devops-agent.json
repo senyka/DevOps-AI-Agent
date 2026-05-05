@@ -1,0 +1,36 @@
+### `monitoring/dashboards/devops-agent.json`
+**Назначение:** Готовый дашборд Grafana (импортируется через UI).
+
+```json
+{
+  "dashboard": {
+    "title": "DevOps AI Agent",
+    "panels": [
+      {
+        "title": "VRAM Usage (vLLM)",
+        "type": "timeseries",
+        "targets": [{"expr": "vllm:gpu_memory_usage_bytes / 1e9", "legendFormat": "GB"}]
+      },
+      {
+        "title": "Confidence Trend",
+        "type": "stat",
+        "targets": [{"expr": "avg(agent_confidence_score)", "legendFormat": "Avg Confidence"}]
+      },
+      {
+        "title": "Error Retrieval Latency",
+        "type": "heatmap",
+        "targets": [{"expr": "histogram_quantile(0.95, rate(qdrant_search_latency_seconds_bucket[5m]))"}]
+      },
+      {
+        "title": "LoRA Version",
+        "type": "table",
+        "targets": [{"expr": "lora_active_version", "format": "table"}]
+      }
+    ],
+    "time": {"from": "now-6h", "to": "now"},
+    "refresh": "30s"
+  }
+}
+```
+
+---

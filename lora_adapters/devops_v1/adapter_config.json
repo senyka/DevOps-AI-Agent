@@ -1,0 +1,15 @@
+### `lora_adapters/devops_v1/adapter_config.json` (пример)
+```json
+{
+  "base_model_name_or_path": "Qwen/Qwen2.5-14B-Instruct-AWQ",
+  "task_type": "CAUSAL_LM",
+  "peft_type": "LORA",
+  "r": 32,
+  "lora_alpha": 64,
+  "target_modules": ["q_proj", "v_proj", "gate_proj", "up_proj", "down_proj", "o_proj"],
+  "modules_to_save": null,
+  "revision": null
+}
+```
+
+---
