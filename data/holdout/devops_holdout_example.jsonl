@@ -1,0 +1,7 @@
+### `data/holdout_devops.jsonl` (пример)
+```json
+{"instruction": "Fix OOMKilled in gitlab-runner", "input": "Context: mem_limit=512M, swap=0", "output": "1. Increase mem_limit to 1G\n2. Enable swap: --memory-swap=1G\n3. Validate: docker stats"}
+{"instruction": "Docker network unreachable after restart", "input": "Error: Cannot connect to Docker daemon", "output": "1. Check docker.service status\n2. Restart: systemctl restart docker\n3. Validate: docker ps"}
+```
+
+---

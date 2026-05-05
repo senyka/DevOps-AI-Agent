@@ -1,0 +1,40 @@
+### `config/qdrant.yaml`
+```yaml
+# config/qdrant.yaml
+# Настройки Qdrant для гибридного поиска
+
+storage:
+  optimizers:
+    default_segment_number: 4
+    max_segment_size: 10_000_000
+    memmap_threshold: 100_000
+    indexing_threshold: 20_000
+    flush_interval_sec: 5
+    max_optimization_threads: 2
+
+performance:
+  max_search_threads: 4
+  max_optimization_threads: 2
+
+collections:
+  devops_errors:
+    vectors:
+      bge-m3:
+        size: 1024
+        distance: Cosine
+    sparse_vectors:
+      bm25:
+        index:
+          type: mutable_ram
+    hnsw_config:
+      m: 16
+      ef_construct: 100
+      full_scan_threshold: 10000
+    quantization_config:
+      scalar:
+        type: int8
+        quantile: 0.99
+        always_ram: true
+```
+
+---
