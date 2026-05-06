@@ -1,6 +1,7 @@
 # agent/cli/ask.py
 import typer, asyncio, json, sys, httpx
 from pathlib import Path
+from typing import Optional, Literal
 from rich.console import Console
 from rich.markdown import Markdown
 

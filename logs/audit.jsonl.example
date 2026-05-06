@@ -1,0 +1,6 @@
+### Пример `logs/audit.jsonl`
+```json
+{"audit_id":"abc123","timestamp":"2026-05-05T10:30:00Z","input":{"task":"Fix OOM","mode":"autonomous"},"output":{"confidence":0.89,"steps_executed":3},"metadata":{"project":"dash-panel/backend"}}
+```
+
+---

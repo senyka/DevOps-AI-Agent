@@ -1,5 +1,6 @@
 # agent/cli/fix.py
 import typer, asyncio, json, sys, httpx, time
+from typing import Optional
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 

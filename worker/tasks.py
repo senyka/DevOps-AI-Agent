@@ -1,12 +1,11 @@
 # worker/tasks.py
 import os, json, logging, asyncio
+from typing import Optional
 from celery import Celery
 from datetime import datetime, timedelta
 
 from agent.memory import init_stores, search_error_cases, update_knowledge_graph
 from agent.llm import call_vllm
-from worker.train import train_lora_adapter
-from worker.validate import run_ragas_validation
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +53,7 @@ def consolidate_memory(self, audit_id: str = None, since: str = "24h"):
         if len(patterns) >= 20:  # Порог для обучения
             dataset_path = generate_lora_dataset(patterns)
             # Запускаем обучение (асинхронно)
-            train_lora_adapter.delay(dataset_path, version=f"v{next_version()}")
+            train_lora_adapter_task.delay(dataset_path, version=f"v{next_version()}")
         
         # 4. Обновляем статус кейсов
         mark_consolidated([c["id"] for c in new_cases])
@@ -70,8 +69,8 @@ def consolidate_memory(self, audit_id: str = None, since: str = "24h"):
         logger.exception("Consolidation failed")
         raise self.retry(exc=e, countdown=300)
 
-@app.task(bind=True, max_retries=2)
-def train_lora_adapter(self, dataset_path: str, version: str):
+@app.task(bind=True, max_retries=2, name="worker.tasks.train_lora_adapter_task")
+def train_lora_adapter_task(self, dataset_path: str, version: str):
     """Fine-tuning LoRA адаптера на успешных кейсах"""
     
     try:
@@ -131,13 +130,13 @@ def parse_duration(s: str) -> timedelta:
     match = re.match(r"^(\d+)([hdw])$", s)
     if not match:
         raise ValueError(f"Invalid duration: {s}")
-    value, unit = int(match[1]), match[2]
+    value, unit = int(match.group(1)), match.group(2)
     return {"h": timedelta(hours=value), "d": timedelta(days=value), "w": timedelta(weeks=value)}[unit]
 
-def fetch_new_cases(cutoff: datetime, status: str = "success") -> list[dict]:
+def fetch_new_cases(cutoff: datetime, status: str = "success") -> list:
     """Получение новых кейсов из БД"""
     # Реализация через agent.memory.search_error_cases с фильтрами
-    pass
+    return []
 
 def extract_pattern_via_llm(case: dict) -> Optional[dict]:
     """Извлечение паттерна через LLM (root cause + универсальные шаги)"""
@@ -160,17 +159,16 @@ def extract_pattern_via_llm(case: dict) -> Optional[dict]:
     response = asyncio.run(call_vllm(prompt, temperature=0.0, response_format={"type": "json_object"}))
     return json.loads(response) if response else None
 
-def generate_lora_dataset(patterns: list[dict]) -> str:
+def generate_lora_dataset(patterns: list) -> str:
     """Генерация JSONL датасета в формате Alpaca"""
-    import json
     output_path = f"/data/datasets/devops_fixes_{datetime.now():%Y%m%d_%H%M}.jsonl"
     
     with open(output_path, "w", encoding="utf-8") as f:
         for p in patterns:
             sample = {
                 "instruction": f"Fix error: {p['root_cause']}",
-                "input": f"Context: Docker/GitLab environment\nError signature: {p['signature']}",
-                "output": "\n".join([f"{i+1}. {s}" for i, s in enumerate(p["steps"])]) + f"\n\nValidate: {p['validation']}"
+                "input": f"Context: Docker/GitLab environment\nError signature: {p.get('signature', 'unknown')}",
+                "output": "\n".join([f"{i+1}. {s}" for i, s in enumerate(p["steps"])]) + f"\n\nValidate: {p.get('validation', '')}"
             }
             f.write(json.dumps(sample, ensure_ascii=False) + "\n")
     
@@ -202,3 +200,4 @@ def send_alert(message: str):
     """Отправка алерта (в будущем: Slack/Email/Telegram)"""
     logger.critical(f"🚨 ALERT: {message}")
     # В продакшене: отправка в мониторинговую систему
+
