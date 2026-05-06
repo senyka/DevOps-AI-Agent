@@ -1,9 +1,10 @@
 # agent/main.py
-import os, logging, asyncio
+import os, logging, asyncio, uuid, hashlib, time
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import make_asgi_app, Counter, Histogram
+import httpx
 
 from agent.graph import compile_graph, AgentState
 from agent.schemas import QueryRequest, QueryResponse, AuditResponse
@@ -162,8 +163,37 @@ async def check_vllm() -> bool:
     except:
         return False
 
-# ... аналогично check_qdrant(), check_neo4j(), check_postgres()
+async def check_qdrant() -> bool:
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            r = await client.get(f"{os.getenv('QDRANT_URL', 'http://qdrant:6333')}/readyz")
+            return r.status_code == 200
+    except:
+        return False
+
+async def check_neo4j() -> bool:
+    try:
+        from neo4j import GraphDatabase
+        uri = os.getenv('NEO4J_URI', 'bolt://neo4j:7687')
+        password = os.getenv('NEO4J_PASSWORD', 'password')
+        driver = GraphDatabase.driver(uri, auth=("neo4j", password))
+        driver.verify_connectivity()
+        driver.close()
+        return True
+    except:
+        return False
+
+async def check_postgres() -> bool:
+    try:
+        import asyncpg
+        dsn = os.getenv('DATABASE_URL', 'postgresql+asyncpg://agent:password@postgres:5432/devops_memory')
+        # Convert postgresql+asyncpg to postgresql for asyncpg
+        dsn = dsn.replace('postgresql+asyncpg://', 'postgresql://')
+        conn = await asyncpg.connect(dsn)
+        await conn.close()
+        return True
+    except:
+        return False
 
 def generate_audit_id() -> str:
-    import uuid, hashlib, time
     return hashlib.sha256(f"{uuid.uuid4()}{time.time()}".encode()).hexdigest()[:16]

@@ -1,38 +1,42 @@
 ```
 # Dependencies
-venv/
 .venv/
+venv/
 __pycache__/
+
+# Logs and temp files
+*.log
+*.tmp
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Editors
+.vscode/
+.idea/
+
+# Python specific
 *.pyc
 *.pyo
 *.pyd
-.Python
-env/
-.venv.bak/
-pip-log.txt
-pip-delete-this-directory.txt
-.tox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.log
-*.tmp
+*.py~
 *.swp
 *.swo
-.DS_Store
-Thumbs.db
-.env
-.env.local
-.env.*
-
-# Python
 __pycache__/
-*.py[cod]
-*$py.class
 *.so
+*.egg-info/
+.eggs/
+.coverage
+htmlcov/
+.coverage.*
+.mypy_cache/
+.pytest_cache/
+.tox/
+.hypothesis/
+
+# Distribution / packaging
 .Python
 build/
 develop-eggs/
@@ -46,34 +50,16 @@ parts/
 sdist/
 var/
 wheels/
-*.egg-info/
-.installed.cfg
 *.egg
+*.whl
+pip-wheel-metadata/
 
-# Docker
-.dockerenv
-Dockerfile*
-docker-compose*
-
-# Local config files
-config/local.yml
-config/development.yml
-
-# Data files that might be generated
-data/*.jsonl
-!data/.gitkeep
-
-# Monitoring and logs
-*.log
-logs/
-*.out
-*.pid
-
-# Backup files
-*.bak
-*.backup
+# IDE
+.vscode/
+.idea/
 *.swp
 *.swo
+*~
 
 # OS generated files
 .DS_Store

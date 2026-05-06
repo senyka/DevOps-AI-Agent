@@ -1,5 +1,6 @@
 # agent/cli/memory.py
 import typer, asyncio, json, sys, httpx
+from typing import Optional, Literal
 from rich.console import Console
 from rich.table import Table
 from datetime import datetime
