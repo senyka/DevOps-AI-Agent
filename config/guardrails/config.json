@@ -1,0 +1,17 @@
+{
+  "models": [
+    {
+      "type": "llm",
+      "name": "default",
+      "engine": "openai"
+    }
+  ],
+  "rails": {
+    "input": {
+      "flows": ["check input for dangerous patterns"]
+    },
+    "output": {
+      "flows": ["output_guard"]
+    }
+  }
+}

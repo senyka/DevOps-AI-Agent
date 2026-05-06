@@ -1,0 +1,26 @@
+define user ask about something
+  "What is the status of ..."
+  "Show me logs for ..."
+  "Check docker ..."
+  "Get container info ..."
+
+define bot refuse dangerous request
+  "I cannot perform this action due to safety restrictions."
+  "This operation is not allowed for security reasons."
+  "The requested command violates security policies."
+
+define flow
+  user ask about something
+  
+  # Проверка на опасные паттерны во входных данных
+  when $user_message contains_any ["rm", "kill", "delete", "exec", "drop", "stop", "remove"]
+    bot refuse dangerous request
+  
+  else
+    # Разрешаем обработку запроса
+    bot generate normal response
+
+# Guardrails для выходных данных
+define flow output_guard
+  when $bot_message contains_any ["docker rm", "docker kill", "docker exec", "docker stop", "docker run"]
+    bot refuse dangerous request
