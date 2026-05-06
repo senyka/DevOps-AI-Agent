@@ -201,29 +201,3 @@ def send_alert(message: str):
     logger.critical(f"🚨 ALERT: {message}")
     # В продакшене: отправка в мониторинговую систему
 
-def validate_dataset(path: str) -> bool:
-    """Валидация датасета"""
-    return os.path.exists(path)
-
-def run_unsloth_training(dataset_path: str, output_dir: str, config_path: str) -> dict:
-    """Запуск обучения через unsloth"""
-    return {"loss": 0.1}
-
-def run_ragas_validation(adapter_path: str, test_file: str = None) -> dict:
-    """Валидация через RAGAS"""
-    return {"answer_relevance": 0.9, "faithfulness": 0.85}
-
-def get_active_lora_name() -> Optional[str]:
-    """Получение имени активного адаптера"""
-    return "devops_v1"
-
-def cleanup_lora_dir(path: str):
-    """Очистка директории LoRA"""
-    import shutil
-    if os.path.exists(path):
-        shutil.rmtree(path)
-
-def mark_consolidated(ids: list):
-    """Отметка кейсов как консолидированных"""
-    pass
-

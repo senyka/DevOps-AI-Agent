@@ -3,41 +3,6 @@
 .venv/
 venv/
 __pycache__/
-
-# Logs and temp files
-*.log
-*.tmp
-
-# Environment
-.env
-.env.local
-*.env.*
-
-# Editors
-.vscode/
-.idea/
-
-# Python specific
-*.pyc
-*.pyo
-*.pyd
-*.py~
-*.swp
-*.swo
-__pycache__/
-*.so
-*.egg-info/
-.eggs/
-.coverage
-htmlcov/
-.coverage.*
-.mypy_cache/
-.pytest_cache/
-.tox/
-.hypothesis/
-
-# Distribution / packaging
-.Python
 build/
 develop-eggs/
 dist/
@@ -51,16 +16,6 @@ sdist/
 var/
 wheels/
 *.egg
-*.whl
-pip-wheel-metadata/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
 # OS generated files
 .DS_Store
 .DS_Store?
