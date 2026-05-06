@@ -32,4 +32,3 @@ find "$BACKUP_DIR" -name "*.snapshot" -mtime +7 -delete
 
 echo "✓ Backup complete: $BACKUP_DIR"
 ls -lh "$BACKUP_DIR" | tail -5
-
