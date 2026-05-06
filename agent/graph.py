@@ -1,7 +1,3 @@
-### `agent/graph.py`
-**Назначение:** Определение LangGraph state machine с узлами research→plan→execute→reflect.
-
-```python
 # agent/graph.py
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
@@ -309,6 +305,3 @@ def parse_gitlab_action(command: str) -> GitLabAction:
 def generate_audit_id() -> str:
     import uuid, hashlib, time
     return hashlib.sha256(f"{uuid.uuid4()}{time.time()}".encode()).hexdigest()[:16]
-```
-
----

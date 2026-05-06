@@ -1,7 +1,3 @@
-### `agent/llm.py`
-**Назначение:** Клиент для vLLM с поддержкой JSON-mode, retry-логикой и логированием.
-
-```python
 # agent/llm.py
 import os, logging, asyncio
 from typing import Optional, Union
@@ -87,6 +83,3 @@ async def call_vllm_with_tools(
         )
         resp.raise_for_status()
         return resp.json()["choices"][0]["message"]
-```
-
----

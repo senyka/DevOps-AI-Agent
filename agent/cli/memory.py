@@ -1,7 +1,3 @@
-### `agent/cli/memory.py`
-**Назначение:** Команды для работы с памятью (`devops-agent memory`).
-
-```python
 # agent/cli/memory.py
 import typer, asyncio, json, sys, httpx
 from rich.console import Console
@@ -108,6 +104,4 @@ def export(
             typer.echo(f"✓ Экспортировано в {output} ({len(resp.content)} bytes)")
     
     asyncio.run(run())
-```
 
----

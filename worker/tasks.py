@@ -1,7 +1,3 @@
-### `worker/tasks.py`
-**Назначение:** Celery tasks для консолидации памяти и обучения LoRA.
-
-```python
 # worker/tasks.py
 import os, json, logging, asyncio
 from celery import Celery
@@ -206,6 +202,3 @@ def send_alert(message: str):
     """Отправка алерта (в будущем: Slack/Email/Telegram)"""
     logger.critical(f"🚨 ALERT: {message}")
     # В продакшене: отправка в мониторинговую систему
-```
-
----

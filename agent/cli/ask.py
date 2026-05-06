@@ -1,7 +1,3 @@
-### `agent/cli/ask.py`
-**Назначение:** Реализация команды `devops-agent ask`.
-
-```python
 # agent/cli/ask.py
 import typer, asyncio, json, sys, httpx
 from pathlib import Path
@@ -72,6 +68,3 @@ def ask(
                 console.print(f"\n[dim]Audit ID: {result['audit_id']}[/]")
     
     asyncio.run(send())
-```
-
----

@@ -1,7 +1,3 @@
-### `agent/tools.py`
-**Назначение:** Инструменты агента: Docker, GitLab API, безопасное выполнение команд.
-
-```python
 # agent/tools.py
 import os, re, json, asyncio, logging
 from typing import Optional, Union
@@ -220,6 +216,3 @@ async def validate_step_result(result: ExecutionResult, validation_cmd: str) -> 
     # Выполняем команду валидации
     validation_result = await safe_shell_exec(validation_cmd, timeout=15)
     return validation_result.exit_code == 0 and "error" not in validation_result.stderr.lower()
-```
-
----

@@ -1,7 +1,3 @@
-### `agent/memory.py`
-**Назначение:** Абстракции для работы с хранилищами (Qdrant, Neo4j, PostgreSQL).
-
-```python
 # agent/memory.py
 import os, json, logging, asyncpg
 from datetime import datetime, timedelta
@@ -142,6 +138,3 @@ async def close_stores():
     if "neo4j" in _stores:
         await _stores["neo4j"].close()
     logger.info("✓ Memory stores closed")
-```
-
----

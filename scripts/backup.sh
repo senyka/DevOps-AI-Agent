@@ -1,6 +1,3 @@
-### `scripts/backup.sh`
-```bash
-#!/bin/bash
 # scripts/backup.sh
 # Резервное копирование: PostgreSQL + Qdrant + Neo4j
 
@@ -35,6 +32,3 @@ find "$BACKUP_DIR" -name "*.snapshot" -mtime +7 -delete
 
 echo "✓ Backup complete: $BACKUP_DIR"
 ls -lh "$BACKUP_DIR" | tail -5
-```
-
----

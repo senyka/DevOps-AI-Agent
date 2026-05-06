@@ -1,7 +1,3 @@
-### `agent/cli/__init__.py`
-**Назначение:** Точка входа для CLI-утилиты (Typer-based).
-
-```python
 # agent/cli/__init__.py
 import typer, asyncio, json, sys, logging
 from rich.console import Console
@@ -73,6 +69,3 @@ def show_audit(audit_id: str = typer.Argument(..., help="ID аудита")):
 
 if __name__ == "__main__":
     app()
-```
-
----

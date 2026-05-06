@@ -1,7 +1,3 @@
-### `agent/cli/fix.py`
-**Назначение:** Реализация команды `devops-agent fix` для автономного исправления.
-
-```python
 # agent/cli/fix.py
 import typer, asyncio, json, sys, httpx, time
 from rich.console import Console
@@ -83,6 +79,4 @@ def fix(
             console.print(f"📊 Audit: {result['audit_id']}")
     
     asyncio.run(run_fix())
-```
 
----

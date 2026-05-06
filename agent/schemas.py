@@ -1,7 +1,3 @@
-### `agent/schemas.py`
-**Назначение:** Pydantic-модели для валидации входных/выходных данных.
-
-```python
 # agent/schemas.py
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import Optional, List, Literal, Union
@@ -103,6 +99,3 @@ class ExecutionResult(BaseModel):
         if v is not None and v < -1:
             raise ValueError("Invalid exit code")
         return v
-```
-
----

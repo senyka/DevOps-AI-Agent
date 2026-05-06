@@ -1,6 +1,3 @@
-### `scripts/lora_manager.sh`
-```bash
-#!/bin/bash
 # scripts/lora_manager.sh
 # Управление LoRA адаптерами в vLLM
 
@@ -64,6 +61,3 @@ case $ACTION in
     usage
     ;;
 esac
-```
-
----

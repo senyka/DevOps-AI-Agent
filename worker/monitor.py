@@ -1,7 +1,3 @@
-### `worker/monitor.py`
-**Назначение:** Мониторинг качества адаптеров и авто-откат.
-
-```python
 # worker/monitor.py
 import os, json, logging, httpx
 from datetime import datetime
@@ -40,6 +36,3 @@ def cleanup_old_lora_adapters(keep_last: int = 5):
             logger.error(f"Failed to remove {adapter}: {e}")
     
     return {"removed": removed, "kept": len(adapters[:keep_last])}
-```
-
----
