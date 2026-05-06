@@ -667,12 +667,13 @@ SOFTWARE.
 > • Обсуждение: `#devops-ai` в внутреннем чате  
 > • Документация: `docker-compose exec agent python -m pydoc -b 8081`  
 
-*Последнее обновление: 2026-05-05*  
-*Версия: 0.1.1 (alpha) — Security Patch Release*
+*Последнее обновление: 2026-05-06*  
+*Версия: 0.1.2 (alpha) — Security Hardening & Documentation Update*
 
 ### История версий
 
 | Версия | Дата | Изменения |
 |--------|------|-----------|
+| 0.1.2 | 2026-05-06 | 📝 **Documentation Update**: актуализация README, исправление .env.example (удалена Markdown-разметка), полная проверка безопасности |
 | 0.1.1 | 2026-05-05 | 🔐 **Security Patch**: устранены Critical и High уязвимости (Command Injection, Path Traversal, Pickle deserialization, SQL injection) |
 | 0.1.0 | 2026-05-01 | 🎉 Первый альфа-релиз: базовая функциональность агента, LangGraph, vLLM, Qdrant, Neo4j |
