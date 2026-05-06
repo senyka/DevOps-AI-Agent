@@ -1,7 +1,4 @@
-### `agent/requirements.txt`
-**Назначение:** Зависимости Python для основного приложения.
-
-```txt
+# agent/requirements.txt
 # Core
 fastapi==0.109.2
 uvicorn[standard]==0.27.1
@@ -40,6 +37,3 @@ structlog==24.1.0
 # Code analysis (опционально)
 tree-sitter==0.21.3
 tree-sitter-python==0.21.0
-```
-
----

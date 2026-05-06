@@ -1,8 +1,49 @@
 ```
-# Dependencies
-.venv/
-venv/
+# Python
 __pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+.env
+.env.local
+*.env.*
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Build and distribution artifacts
+build/
+dist/
+*.egg
+*.egg-info/
+*.so
+.libs/
+
+# Testing
+.coverage
+coverage/
+htmlcov/
+.nox/
+.tox/
+.pytest_cache/
+.hypothesis/
+
+# Dependencies
+node_modules/
+.jupyter_releaser_cache/
+
+# IDE and editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*.tmp
+
+# OS
 build/
 develop-eggs/
 dist/
@@ -18,10 +59,11 @@ wheels/
 *.egg
 # OS generated files
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
 Thumbs.db
+
+# Logs
+*.log
+
+# Coverage
+.coverage*
 ```

@@ -1,6 +1,6 @@
 # agent/cli/memory.py
 import typer, asyncio, json, sys, httpx
-from typing import Optional, Literal
+from typing import Optional
 from rich.console import Console
 from rich.table import Table
 from datetime import datetime
@@ -12,7 +12,7 @@ def search(
     query: str = typer.Argument(..., help="Поисковый запрос"),
     project: Optional[str] = typer.Option(None, "--project", "-p"),
     limit: int = typer.Option(10, "--limit", "-l", min=1, max=50),
-    format: Literal["table", "json"] = typer.Option("table", "--format")
+    format: str = typer.Option("table", "--format", help="Формат: table или json")
 ):
     """Поиск в памяти ошибок"""
     
@@ -82,7 +82,7 @@ def consolidate(
 @app.command("export")
 def export(
     output: str = typer.Option("export.json", "--output", "-o"),
-    format: Literal["json", "markdown", "csv"] = typer.Option("json", "--format"),
+    format: str = typer.Option("json", "--format", help="Формат: json, markdown или csv"),
     project: Optional[str] = typer.Option(None, "--project", "-p")
 ):
     """Экспорт памяти в файл"""

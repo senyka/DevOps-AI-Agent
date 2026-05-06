@@ -3,9 +3,9 @@ import typer, asyncio, json, sys, logging
 from rich.console import Console
 from rich.table import Table
 
-from agent.cli.ask import ask_command
-from agent.cli.fix import fix_command
-from agent.cli.memory import memory_group
+from agent.cli.ask import ask as ask_command
+from agent.cli.fix import fix as fix_command
+from agent.cli.memory import app as memory_group
 
 app = typer.Typer(
     name="devops-agent",
