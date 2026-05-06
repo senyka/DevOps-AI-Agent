@@ -1,0 +1,66 @@
+### `worker/configs/devops_lora.yaml`
+**Назначение:** Конфигурация обучения LoRA через Unsloth/Axolotl.
+
+```yaml
+# worker/configs/devops_lora.yaml
+# Конфиг для fine-tuning на DevOps-ошибках и фиксах
+
+# === Модель ===
+base_model: Qwen/Qwen2.5-14B-Instruct-AWQ
+model_type: AutoModelForCausalLM
+tokenizer_type: AutoTokenizer
+trust_remote_code: true
+
+# === LoRA параметры (оптимизировано для 24GB VRAM) ===
+lora_r: 32
+lora_alpha: 64
+lora_dropout: 0.05
+target_modules:
+  - q_proj
+  - v_proj
+  - gate_proj
+  - up_proj
+  - down_proj
+  - o_proj
+
+# === Обучение ===
+sequence_len: 4096
+batch_size: 2
+gradient_accumulation_steps: 8
+num_epochs: 2
+learning_rate: 2e-4
+lr_scheduler: cosine
+warmup_steps: 50
+optim: adamw_8bit
+weight_decay: 0.01
+max_grad_norm: 1.0
+
+# === Данные ===
+dataset:
+  - path: ./data/devops_fixes_v1.jsonl
+    type: alpaca
+    conversation: "qwen"  # Формат диалога для Qwen
+
+# === Валидация ===
+val_set_size: 0.1
+evals_per_epoch: 1
+save_steps: 50
+output_dir: /lora/devops_v{version}
+
+# === Квантование ===
+# База уже в AWQ, обучаем в fp16
+load_in_4bit: false
+bf16: auto
+fp16: true
+
+# === Интеграция с vLLM ===
+adapter_name: devops_fixes
+enable_lora: true
+lora_modules: "all"  # Применять ко всем целевым слоям
+
+# === Логирование ===
+logging_steps: 10
+report_to: ["tensorboard"]  # или "none" для минимизации зависимостей
+```
+
+---
