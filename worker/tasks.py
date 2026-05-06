@@ -202,4 +202,3 @@ def send_alert(message: str):
     """Отправка алерта (в будущем: Slack/Email/Telegram)"""
     logger.critical(f"🚨 ALERT: {message}")
     # В продакшене: отправка в мониторинговую систему
-

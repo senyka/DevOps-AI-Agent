@@ -167,3 +167,4 @@ async def check_vllm() -> bool:
 def generate_audit_id() -> str:
     import uuid, hashlib, time
     return hashlib.sha256(f"{uuid.uuid4()}{time.time()}".encode()).hexdigest()[:16]
+

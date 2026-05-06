@@ -68,4 +68,3 @@ def ask(
                 console.print(f"\n[dim]Audit ID: {result['audit_id']}[/]")
     
     asyncio.run(send())
-

@@ -8,32 +8,6 @@ __pycache__/
 *.pyd
 .Python
 env/
-.venv.bak/
-pip-log.txt
-pip-delete-this-directory.txt
-.tox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.log
-*.tmp
-*.swp
-*.swo
-.DS_Store
-Thumbs.db
-.env
-.env.local
-.env.*
-
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
 build/
 develop-eggs/
 dist/
@@ -49,32 +23,6 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-
-# Docker
-.dockerenv
-Dockerfile*
-docker-compose*
-
-# Local config files
-config/local.yml
-config/development.yml
-
-# Data files that might be generated
-data/*.jsonl
-!data/.gitkeep
-
-# Monitoring and logs
-*.log
-logs/
-*.out
-*.pid
-
-# Backup files
-*.bak
-*.backup
-*.swp
-*.swo
-
 # OS generated files
 .DS_Store
 .DS_Store?
