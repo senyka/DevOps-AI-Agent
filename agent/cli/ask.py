@@ -1,7 +1,7 @@
 # agent/cli/ask.py
 import typer, asyncio, json, sys, httpx
 from pathlib import Path
-from typing import Optional, Literal
+from typing import Optional
 from rich.console import Console
 from rich.markdown import Markdown
 
@@ -13,7 +13,7 @@ def ask(
     project: Optional[str] = typer.Option(None, "--project", "-p", help="Проект: group/project"),
     error: Optional[str] = typer.Option(None, "--error", "-e", help="Текст ошибки"),
     context_file: Optional[Path] = typer.Option(None, "--context-file", "-f", help="Файл с контекстом"),
-    mode: Literal["advisory", "autonomous"] = typer.Option("advisory", "--mode", "-m"),
+    mode: str = typer.Option("advisory", "--mode", "-m", help="Режим: advisory или autonomous"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Подробный вывод")
 ):
     """Задать вопрос агенту или описать ошибку"""
