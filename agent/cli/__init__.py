@@ -69,4 +69,3 @@ def show_audit(audit_id: str = typer.Argument(..., help="ID аудита")):
 
 if __name__ == "__main__":
     app()
-

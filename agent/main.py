@@ -197,3 +197,4 @@ async def check_postgres() -> bool:
 
 def generate_audit_id() -> str:
     return hashlib.sha256(f"{uuid.uuid4()}{time.time()}".encode()).hexdigest()[:16]
+

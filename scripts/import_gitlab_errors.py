@@ -1,5 +1,3 @@
-# Импорт истории ошибок из GitLab CI в память агента
-
 import os, sys, json, asyncio, logging
 import httpx, asyncpg
 from datetime import datetime, timedelta
@@ -83,4 +81,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
