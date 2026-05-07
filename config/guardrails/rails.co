@@ -1,0 +1,17 @@
+define user ask about something
+  "What is the status of ..."
+  "Show me logs for ..."
+  "Inspect container ..."
+  "Run docker ps"
+  "*"
+
+define bot refuse dangerous request
+  "I cannot perform this action due to safety restrictions. This operation involves potentially destructive commands."
+
+define flow
+  user ask about something
+  when $user_message contains_any ["rm", "kill", "delete", "exec", "drop", "stop", "start", "run"]
+    bot refuse dangerous request
+  else
+    # Продолжить обычную обработку
+    bot generate normal response
