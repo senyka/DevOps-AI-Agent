@@ -158,7 +158,7 @@ if __name__ == "__main__":
 async def check_vllm() -> bool:
     try:
         async with httpx.AsyncClient(timeout=5) as client:
-            r = await client.get(f"{os.getenv('OPENAI_API_BASE', 'http://vllm:8000/v1')}/health")
+            r = await client.get(f"{os.getenv('LLM_API_BASE', 'http://vllm:8000/v1')}/health")
             return r.status_code == 200
     except:
         return False
@@ -186,8 +186,8 @@ async def check_neo4j() -> bool:
 async def check_postgres() -> bool:
     try:
         import asyncpg
-        dsn = os.getenv('DATABASE_URL', 'postgresql+asyncpg://agent:password@postgres:5432/devops_memory')
-        # Convert postgresql+asyncpg to postgresql for asyncpg
+        dsn = os.getenv('DATABASE_URL', 'postgresql://devops:secure_password_change_me@postgres:5432/devops_db')
+        # Convert postgresql+asyncpg to postgresql for asyncpg if needed
         dsn = dsn.replace('postgresql+asyncpg://', 'postgresql://')
         conn = await asyncpg.connect(dsn)
         await conn.close()

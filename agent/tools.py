@@ -6,6 +6,7 @@ import httpx, asyncpg
 from datetime import datetime
 
 from agent.schemas import DockerCommand, GitLabAction, ExecutionResult
+from agent.security.docker_validator import validate_docker_command, sanitize_container_name
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +16,7 @@ QDRANT_URL = os.getenv("QDRANT_URL", "http://qdrant:6333")
 NEO4J_URI = os.getenv("NEO4J_URI", "bolt://neo4j:7687")
 NEO4J_USER = os.getenv("NEO4J_USERNAME", "neo4j")
 NEO4J_PASS = os.getenv("NEO4J_PASSWORD")
+DOCKER_EXECUTOR_URL = os.getenv("DOCKER_EXECUTOR_URL", "http://docker-executor:5001")
 
 # === Qdrant ===
 
@@ -58,7 +60,22 @@ async def qdrant_search(
 # === Neo4j ===
 
 async def neo4j_query(cypher: str, params: Optional[dict] = None) -> list[dict]:
-    """Выполнение Cypher-запроса с параметрами"""
+    """Выполнение Cypher-запроса с параметрами и валидацией безопасности"""
+    from agent.security.cypher_sanitizer import is_cypher_safe, validate_cypher_params
+    
+    # Валидация Cypher-запроса
+    is_safe, error_msg = is_cypher_safe(cypher)
+    if not is_safe:
+        logger.warning(f"Cypher query blocked: {error_msg}")
+        raise ValueError(f"Unsafe Cypher query: {error_msg}")
+    
+    # Валидация параметров
+    if params:
+        params_valid, params_error = validate_cypher_params(params)
+        if not params_valid:
+            logger.warning(f"Cypher params blocked: {params_error}")
+            raise ValueError(f"Unsafe Cypher params: {params_error}")
+    
     from neo4j import AsyncGraphDatabase
     
     async with AsyncGraphDatabase.driver(
@@ -72,40 +89,51 @@ async def neo4j_query(cypher: str, params: Optional[dict] = None) -> list[dict]:
 # === Docker Exec (sandboxed) ===
 
 async def safe_docker_exec(cmd: DockerCommand) -> ExecutionResult:
-    """Выполнение Docker-команды в sandbox с ограничениями"""
+    """Выполнение Docker-команды через docker-executor сервис"""
     try:
-        # Формирование безопасной команды
-        sandbox_args = [
-            "docker", "exec",
-            "--user", "nobody",
-            "--cap-drop=ALL",
-            "--read-only",
-            "--tmpfs", "/tmp:exec,size=64m",
-            "--network", "none" if "network" not in cmd.command else "host",
-            "--memory", "512m",
-            "--pids-limit", "50",
-            cmd.container,
-            "sh", "-c", f"timeout {cmd.timeout}s {cmd.command}"
-        ]
+        # Валидация команды через security модуль
+        full_command = f"docker {cmd.command}"
+        is_valid, error_msg = validate_docker_command(full_command)
+        if not is_valid:
+            return ExecutionResult(
+                error=f"Command validation failed: {error_msg}",
+                exit_code=-1,
+                command=cmd.command,
+                timestamp=datetime.utcnow().isoformat()
+            )
         
-        proc = await asyncio.create_subprocess_exec(
-            *sandbox_args,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
+        # Санитизация имени контейнера
+        safe_container = sanitize_container_name(cmd.container)
         
-        stdout, stderr = await asyncio.wait_for(
-            proc.communicate(), 
-            timeout=cmd.timeout + 10
-        )
-        
-        return ExecutionResult(
-            stdout=stdout.decode()[:10000],  # Обрезаем большие логи
-            stderr=stderr.decode()[:10000],
-            exit_code=proc.returncode,
-            command=cmd.command,
-            timestamp=datetime.utcnow().isoformat()
-        )
+        # Отправка команды в docker-executor сервис
+        async with httpx.AsyncClient(timeout=cmd.timeout + 30) as client:
+            payload = {
+                "command": f"docker {cmd.command}",
+                "timeout": cmd.timeout
+            }
+            resp = await client.post(
+                f"{DOCKER_EXECUTOR_URL}/exec",
+                json=payload,
+                headers={"Content-Type": "application/json"}
+            )
+            
+            if resp.status_code != 200:
+                error_data = resp.json() if resp.content else {"error": "Unknown error"}
+                return ExecutionResult(
+                    error=error_data.get("error", "Executor request failed"),
+                    exit_code=-1,
+                    command=cmd.command,
+                    timestamp=datetime.utcnow().isoformat()
+                )
+            
+            result_data = resp.json()
+            return ExecutionResult(
+                stdout=result_data.get("output", ""),
+                stderr=result_data.get("stderr", ""),
+                exit_code=result_data.get("exit_code"),
+                command=cmd.command,
+                timestamp=datetime.utcnow().isoformat()
+            )
         
     except asyncio.TimeoutError:
         return ExecutionResult(
