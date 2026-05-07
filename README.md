@@ -518,6 +518,8 @@ curl -X POST http://localhost:5001/exec \
   -d '{"command": "docker ps -a"}'
 ```
 
+**Исправление коллизии**: Ранее агент пытался выполнять Docker-команды напрямую через subprocess, что создавало риск безопасности и дублирование логики. Теперь все команды маршрутизируются через `docker-executor` сервис с централизованной валидацией.
+
 ### 🧠 Защита от Prompt Injection (NeMo Guardrails)
 
 Конфигурация в `config/guardrails/rails.co`:
@@ -535,6 +537,8 @@ is_safe, error = is_cypher_safe("DELETE (n)")  # False, "Запрещённая 
 is_safe, error = is_cypher_safe("MATCH (n) SET n.status = 'active'")  # False, "SET запрещена"
 ```
 
+**Исправление коллизии**: Добавлена обязательная валидация всех Cypher-запросов перед выполнением через `neo4j_query()`. Раньше запросы формировались динамически без проверки, что создавало риск инъекций.
+
 ### 📝 Безопасное логирование
 
 ```python
@@ -551,6 +555,9 @@ masked = mask_sensitive_data(data)
 - **Минимальные привилегии**: GitLab token только с необходимыми правами
 - **Полный аудит**: каждое действие логируется с маскировкой чувствительных данных
 - **Defense in Depth**: многоуровневая защита (валидация → guardrails → approval → sandbox)
+
+---
+
 ## 📊 Мониторинг
 
 ### Prometheus-метрики (`:9090/metrics`)
@@ -688,6 +695,7 @@ devops-agent ask --mode advisory --task "..."  # Только рекоменда
 
 | Версия | Дата | Изменения |
 |--------|------|-----------|
+| 0.2.0 | 2026-05-07 | 🔐 **Security & Fixes**: исправлены коллизии в Docker Executor (маршрутизация через микросервис), добавлена валидация Cypher-запросов, унифицированы переменные окружения (`LLM_API_BASE`), обновлён README с описанием исправлений |
 | 0.1.2 | 2026-05-06 | 📝 **Documentation Update**: актуализация README, исправление .env.example (удалена Markdown-разметка), полная проверка безопасности |
 | 0.1.1 | 2026-05-05 | 🔐 **Security Patch**: устранены Critical и High уязвимости (Command Injection, Path Traversal, Pickle deserialization, SQL injection) |
 | 0.1.0 | 2026-05-01 | 🎉 Первый альфа-релиз: базовая функциональность агента, LangGraph, vLLM, Qdrant, Neo4j |
