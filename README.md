@@ -1,10 +1,10 @@
 # 🤖 DevOps AI Agent — Персональный исследовательский ассистент
 
-> **Автономный мультиагентный помощник для разработки, администрирования и развёртывания**  
+> **Автономный мультиагентный помощник для разработки, администрирования и развёртывания**
 > 🧠 Глубокие рассуждения • 🗃️ Долгосрочная память • 🔁 Непрерывное обучение • 🔐 Полностью локально
 
 ```
-🎯 Предназначение: Анализ ошибок, генерация кода, управление Docker/GitLab, 
+🎯 Предназначение: Анализ ошибок, генерация кода, управление Docker/GitLab,
    автономное исправление инцидентов с сохранением опыта в памяти.
 
 🖥️ Управление: Терминал (CLI) + Web UI (опционально) — без Telegram/Slack.
@@ -440,58 +440,117 @@ curl -X POST http://localhost:8080/api/v1/query \
 
 ## 🔐 Безопасность
 
-### ✅ Исправленные уязвимости (v0.1.1)
+### ✅ Реализованные меры безопасности (v0.2.0)
 
-В версии 0.1.1 устранены следующие критические проблемы безопасности:
+В версии 0.2.0 добавлен полноценный модуль безопасности `agent/security/` с многоуровневой защитой:
 
-| Уровень | Уязвимость | Статус | Решение |
-|---------|-----------|--------|---------|
-| 🔴 Critical | Command Injection в `safe_shell_exec` | ✅ Исправлено | Строгая валидация команд через allowlist, экранирование аргументов |
-| 🔴 Critical | Хардкод секретов в `.env.example` | ✅ Исправлено | Заменено на плейсхолдеры, добавлены генераторы паролей |
-| 🔴 Critical | Path Traversal в работе с файлами | ✅ Исправлено | Проверка путей через `os.path.realpath`, запрет выхода за пределы рабочей директории |
-| 🟠 High | Небезопасная десериализация (Pickle) | ✅ Исправлено | Замена на JSON для всех внешних данных |
-| 🟠 High | Потенциальная SQL-инъекция | ✅ Исправлено | Параметризованные запросы, ORM-валидация |
-| 🟠 High | Отсутствие валидации ввода | ✅ Исправлено | Pydantic-схемы для всех входных данных |
-| 🟠 High | Чрезмерные права доступа | ✅ Исправлено | Минимальные capability в Docker, принцип наименьших привилегий |
+| Компонент | Назначение | Файл |
+|-----------|-----------|------|
+| **Docker Validator** | Строгий allowlist Docker-команд | `agent/security/docker_validator.py` |
+| **Approval System** | Human-in-the-loop для опасных операций | `agent/security/approval.py` |
+| **Cypher Sanitizer** | Валидация Cypher-запросов (только чтение) | `agent/security/cypher_sanitizer.py` |
+| **Secrets Manager** | Поддержка Docker Secrets + env fallback | `agent/security/secrets.py` |
+| **Secure Logging** | Автоматическая маскировка чувствительных данных | `agent/security/logging.py` |
+| **Docker Executor** | Изолированный микросервис для Docker-команд | `docker-executor/` |
+| **Guardrails Config** | NeMo Guardrails для LLM | `config/guardrails/` |
 
-### Принципы
-- **Нулевое доверие к выводам LLM**: все команды валидируются через Pydantic-схемы перед выполнением
-- **Sandbox по умолчанию**: Docker-контейнеры с `--cap-drop=ALL`, `--read-only`, `--network=none`
-- **Минимальные привилегии**: GitLab token только с `api` + `read_repository`, без `write_repository` по умолчанию
-- **Полный аудит**: каждое действие хешируется (SHA-256) и логируется с контекстом
-- **Defense in Depth**: многоуровневая защита от инъекций, обхода путей и несанкционированного доступа
+### 🛡️ Защита от инъекций команд через LLM
 
-### Конфигурация sandbox
-```yaml
-# Пример ограничений для docker_exec
-docker run --rm \
-  --user nobody \
-  --cap-drop=ALL \
-  --cap-add=NET_BIND_SERVICE \  # Только если нужно
-  --read-only \
-  --tmpfs /tmp:exec,size=64m \
-  --network none \              # Или host, если явно разрешено
-  --memory 512m \
-  --pids-limit 50 \
-  my-sandbox-image \
-  sh -c "your-command"
+#### А. Жёсткий allowlist в `DockerCommand`
+```python
+from agent.security import validate_docker_command
+
+# Разрешены только: ps, logs, inspect, version, info
+is_valid, error = validate_docker_command("docker ps -a")  # True, ""
+is_valid, error = validate_docker_command("docker rm container")  # False, "Команда 'rm' не входит в разрешённый список"
 ```
 
-### Human-in-the-loop
+#### Б. Интеграция в системный промпт LLM
+```python
+system_prompt = """
+Ты – ассистент DevOps. Твоя задача – составлять ТОЛЬКО безопасные docker-команды из разрешённого списка.
+Разрешённые команды: docker ps, docker logs, docker inspect.
+Ты НЕ ИМЕЕШЬ ПРАВА предлагать команды, которые удаляют, останавливают, убивают контейнеры или используют exec.
+"""
+```
+
+#### В. Human-in-the-loop с определением опасностей
+```python
+from agent.security import check_danger, requires_approval
+
+response = "Let me run docker rm -f container123"
+is_danger, description, severity = check_danger(response)
+# is_danger=True, description="Удаление файлов/контейнеров", severity="critical"
+
+if requires_approval(response):
+    # Запросить подтверждение у пользователя
+    pass
+```
+
+### 🔐 Управление секретами
+
+#### Отказ от `.env` в пользу Docker Secrets (для production)
 ```bash
-# Команды, требующие подтверждения (настраивается в .env)
-DANGEROUS_PATTERNS="rm -rf,systemctl restart prod,docker rm -f,git push --force"
-
-# CLI запросит подтверждение интерактивно:
-$ devops-agent fix --project X
-⚠  План содержит опасные команды:
-   • docker rm -f gitlab-runner-123
-   • systemctl restart gitlab-runner
-   Подтвердить выполнение? [y/N]: 
+# Создание секретов Docker
+echo "my_secure_password" | docker secret create db_password -
+echo "glpat-xxxxx" | docker secret create gitlab_token -
 ```
 
----
+```python
+# Чтение секретов в коде
+from agent.security import get_secret, get_required_secret
 
+token = get_secret("GITLAB_TOKEN")  # Читает из _FILE или env
+password = get_required_secret("DB_PASSWORD")  # ValueError если не найден
+```
+
+### 🐳 Безопасная работа с Docker (без монтирования сокета)
+
+Архитектура с изолированным Docker Executor:
+- Агент **не имеет доступа** к `/var/run/docker.sock`
+- Все Docker-команды выполняются через отдельный микросервис
+- Микросервис принимает только разрешённые команды через HTTP API
+
+```bash
+# Вызов через API
+curl -X POST http://localhost:5001/exec \
+  -H "Content-Type: application/json" \
+  -d '{"command": "docker ps -a"}'
+```
+
+### 🧠 Защита от Prompt Injection (NeMo Guardrails)
+
+Конфигурация в `config/guardrails/rails.co`:
+- Блокировка входных паттернов: `rm`, `kill`, `delete`, `exec`, `drop`
+- Блокировка выходных паттернов: `docker rm`, `docker kill`, `docker exec`
+- Автоматический отказ с сообщением о политиках безопасности
+
+### 📊 Валидация Cypher-запросов
+
+```python
+from agent.security import is_cypher_safe
+
+is_safe, error = is_cypher_safe("MATCH (n) RETURN n")  # True, ""
+is_safe, error = is_cypher_safe("DELETE (n)")  # False, "Запрещённая операция"
+is_safe, error = is_cypher_safe("MATCH (n) SET n.status = 'active'")  # False, "SET запрещена"
+```
+
+### 📝 Безопасное логирование
+
+```python
+from agent.security import mask_sensitive_data
+
+data = {"password": "secret123", "api_key": "sk-xxxx", "username": "admin"}
+masked = mask_sensitive_data(data)
+# {"password": "****", "api_key": "****", "username": "admin"}
+```
+
+### Принципы безопасности
+- **Нулевое доверие к выводам LLM**: все команды валидируются через allowlist
+- **Sandbox по умолчанию**: Docker Executor с минимальными привилегиями
+- **Минимальные привилегии**: GitLab token только с необходимыми правами
+- **Полный аудит**: каждое действие логируется с маскировкой чувствительных данных
+- **Defense in Depth**: многоуровневая защита (валидация → guardrails → approval → sandbox)
 ## 📊 Мониторинг
 
 ### Prometheus-метрики (`:9090/metrics`)
@@ -515,7 +574,7 @@ memory_consolidation_last_timestamp
 ### Готовый дашборд Grafana
 Импорт: `monitoring/dashboards/devops-agent.json`
 
-![Дашборд: ключевые метрики](./monitoring/dashboards/preview.png)  
+![Дашборд: ключевые метрики](./monitoring/dashboards/preview.png)
 *(визуализация: VRAM, confidence trend, top errors, LoRA version)*
 
 ### Логи
@@ -558,8 +617,8 @@ curl -s http://localhost:6333/collections/devops_errors/points/scroll \
 devops-agent memory consolidate --since "7d" --force
 
 # Проверить эмбеддинги
-python -c "from sentence_transformers import SentenceTransformer; 
-m=SentenceTransformer('BAAI/bge-m3'); 
+python -c "from sentence_transformers import SentenceTransformer;
+m=SentenceTransformer('BAAI/bge-m3');
 print(m.encode('test error', normalize_embeddings=True).shape)"
 ```
 
@@ -596,33 +655,33 @@ devops-agent ask --mode advisory --task "..."  # Только рекоменда
 ## 💡 Предложения по улучшению
 
 ### 🎯 Короткий срок (1-2 недели)
-- [ ] **Webhook-интеграция с GitLab**: авто-триггер агента при падении pipeline  
+- [ ] **Webhook-интеграция с GitLab**: авто-триггер агента при падении pipeline
   → Добавить endpoint `/webhook/gitlab` с верификацией подписи
-- [ ] **Кэширование эмбеддингов**: предвычислять bge-m3 для частых ошибок  
+- [ ] **Кэширование эмбеддингов**: предвычислять bge-m3 для частых ошибок
   → Redis cache с TTL 24h, ключ: `embed:{sha256(error_signature)}`
-- [ ] **Шаблоны фиксов**: библиотека проверенных решений в YAML  
+- [ ] **Шаблоны фиксов**: библиотека проверенных решений в YAML
   → `fixes/docker/oomkilled.yaml` с параметризованными командами
-- [ ] **Экспорт в Runbook**: генерация Markdown-инструкций из успешных кейсов  
+- [ ] **Экспорт в Runbook**: генерация Markdown-инструкций из успешных кейсов
   → `devops-agent memory export --format markdown --output ./runbooks/`
 
 ### 🚀 Средний срок (1-2 месяца)
-- [ ] **Мульти-модельная маршрутизация**:  
+- [ ] **Мульти-модельная маршрутизация**:
   `Qwen2.5-Coder-7B` для кода, `Qwen2.5-14B` для рассуждений, `TinyLlama` для быстрых проверок
-- [ ] **Federated learning**: безопасный обмен паттернами ошибок между инстансами (без сырых данных)  
+- [ ] **Federated learning**: безопасный обмен паттернами ошибок между инстансами (без сырых данных)
   → Гомоморфное шифрование метаданных + агрегация графов
-- [ ] **Visual debugging**: интеграция с `mermaid.js` для генерации диаграмм потока ошибок  
+- [ ] **Visual debugging**: интеграция с `mermaid.js` для генерации диаграмм потока ошибок
   → `devops-agent visualize --audit-id abc123 --format mermaid`
-- [ ] **Predictive alerting**: предсказание потенциальных сбоев на основе трендов в логах  
+- [ ] **Predictive alerting**: предсказание потенциальных сбоев на основе трендов в логах
   → LSTM на метриках + триггер на превентивные действия
 
 ### 🔮 Долгосрочно (квартал+)
-- [ ] **Self-improving architecture**: агент предлагает изменения в собственном коде (через MR в GitLab)  
+- [ ] **Self-improving architecture**: агент предлагает изменения в собственном коде (через MR в GitLab)
   → Code generation + static analysis + human review workflow
-- [ ] **Cross-project knowledge transfer**: обобщение паттернов между проектами (`dash-panel/backend` → `dash-panel/frontend`)  
+- [ ] **Cross-project knowledge transfer**: обобщение паттернов между проектами (`dash-panel/backend` → `dash-panel/frontend`)
   → Мета-обучение на уровне графа знаний
-- [ ] **Offline-first sync**: работа при отключении от сети с последующей синхронизацией  
+- [ ] **Offline-first sync**: работа при отключении от сети с последующей синхронизацией
   → Local-first SQLite + CRDT для состояния
-- [ ] **Formal verification**: проверка сгенерированных планов через TLA+/Coq для критических операций  
+- [ ] **Formal verification**: проверка сгенерированных планов через TLA+/Coq для критических операций
   → Интеграция с `tlaplus` или `why3`
 
 ### История версий
@@ -632,4 +691,3 @@ devops-agent ask --mode advisory --task "..."  # Только рекоменда
 | 0.1.2 | 2026-05-06 | 📝 **Documentation Update**: актуализация README, исправление .env.example (удалена Markdown-разметка), полная проверка безопасности |
 | 0.1.1 | 2026-05-05 | 🔐 **Security Patch**: устранены Critical и High уязвимости (Command Injection, Path Traversal, Pickle deserialization, SQL injection) |
 | 0.1.0 | 2026-05-01 | 🎉 Первый альфа-релиз: базовая функциональность агента, LangGraph, vLLM, Qdrant, Neo4j |
-=======
