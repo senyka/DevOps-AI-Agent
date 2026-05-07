@@ -1,0 +1,22 @@
+{
+  "models": [
+    {
+      "type": "main",
+      "engine": "openai",
+      "model": "gpt-3.5-turbo"
+    }
+  ],
+  "rails": {
+    "input": {
+      "flows": [
+        "self check input",
+        "check dangerous commands"
+      ]
+    },
+    "output": {
+      "flows": [
+        "self check output"
+      ]
+    }
+  }
+}
