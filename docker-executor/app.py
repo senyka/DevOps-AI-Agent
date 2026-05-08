@@ -1,17 +1,44 @@
 """
 Docker Executor Service - безопасный микросервис для выполнения Docker команд.
 Принимает только разрешённые команды через HTTP API.
+Zero-Trust Execution: все команды валидируются по белому списку.
 """
 from flask import Flask, request, jsonify
 import subprocess
 import shlex
 import os
 import re
+from enum import Enum
+from typing import List, Set
 
 app = Flask(__name__)
 
-# Получаем список разрешённых команд из переменной окружения
-ALLOWED_COMMANDS = os.getenv("ALLOWED_COMMANDS", "ps,logs,inspect,version,info").split(",")
+# === Zero-Trust Allowlist ===
+
+class AllowedCommand(str, Enum):
+    """Разрешённые Docker команды (синхронизировано с agent/security/docker_validator.py)"""
+    PS = "ps"
+    LOGS = "logs"
+    INSPECT = "inspect"
+    VERSION = "version"
+    INFO = "info"
+    STATS = "stats"
+
+# Разрешённые флаги для каждой команды
+ALLOWED_FLAGS: dict[AllowedCommand, Set[str]] = {
+    AllowedCommand.PS: {"-a", "--all", "--format", "--filter", "--no-trunc", "-q", "--quiet", "-s", "--size"},
+    AllowedCommand.LOGS: {"--tail", "--since", "--until", "--timestamps", "-f", "--follow", "-n", "--details"},
+    AllowedCommand.INSPECT: {"--format", "--size", "-s"},
+    AllowedCommand.VERSION: set(),
+    AllowedCommand.INFO: {"--format"},
+    AllowedCommand.STATS: {"--format", "--no-stream", "-a", "--all"},
+}
+
+# Запрещённые подстроки в аргументах
+FORBIDDEN_SUBSTRINGS: List[str] = [
+    "rm", "kill", "stop", "exec", "run", "build", "push", "pull", "rmi",
+    "--force", "-f", "delete", "remove", "prune", "system"
+]
 
 # Максимальная длина вывода (защита от DoS)
 MAX_OUTPUT_LENGTH = int(os.getenv("MAX_OUTPUT_LENGTH", "100000"))
@@ -22,8 +49,8 @@ DEFAULT_TIMEOUT = int(os.getenv("COMMAND_TIMEOUT", "30"))
 
 def validate_command(command_str: str) -> tuple[bool, str, list]:
     """
-    Валидирует и разбирает команду.
-
+    Валидирует Docker команду по белому списку (Zero-Trust).
+    
     Returns:
         tuple: (is_valid, error_message, parts)
     """
@@ -50,25 +77,39 @@ def validate_command(command_str: str) -> tuple[bool, str, list]:
 
     sub_cmd = parts[1]
 
-    # Проверка подкоманды в allowlist
-    if sub_cmd not in ALLOWED_COMMANDS:
-        return False, f"Команда '{sub_cmd}' не входит в разрешённый список: {ALLOWED_COMMANDS}", []
+    # Проверка подкоманды в allowlist через Enum
+    try:
+        cmd = AllowedCommand(sub_cmd)
+    except ValueError:
+        allowed_values = [c.value for c in AllowedCommand]
+        return False, f"Команда '{sub_cmd}' не входит в разрешённый список: {allowed_values}", []
 
-    # Дополнительная проверка на запрещённые паттерны в аргументах
-    forbidden_patterns = [
-        r'\brm\b', r'\bkill\b', r'\bstop\b', r'\bexec\b',
-        r'\brun\b', r'\bbuild\b', r'\bpush\b', r'\bpull\b',
-        r'--force\b', r'\b-f\b', r'\bdelete\b', r'\bremove\b',
-    ]
+    allowed_flags = ALLOWED_FLAGS.get(cmd, set())
 
-    for part in parts[2:]:
-        for pattern in forbidden_patterns:
-            if re.search(pattern, part, re.IGNORECASE):
-                return False, f"Обнаружена запрещённая подстрока в аргументе: {part}", []
+    # Проверка флагов и аргументов
+    i = 2
+    while i < len(parts):
+        part = parts[i]
 
-        # Проверка на shell-метасимволы
-        if re.search(r'[;&|`$(){}]', part):
-            return False, f"Аргумент содержит недопустимые символы: {part}", []
+        if part.startswith("-"):
+            # Извлекаем имя флага (без значения)
+            flag = part.split("=")[0]
+            
+            if flag not in allowed_flags:
+                return False, f"Флаг '{flag}' не разрешён для команды '{cmd.value}'"
+        else:
+            # Аргумент (имя контейнера, image id и т.д.)
+            # Проверка на запрещённые подстроки
+            part_lower = part.lower()
+            for danger in FORBIDDEN_SUBSTRINGS:
+                if danger in part_lower:
+                    return False, f"Обнаружена подозрительная подстрока '{danger}' в аргументе"
+
+            # Дополнительная проверка: аргумент не должен содержать shell-метасимволы
+            if re.search(r'[;&|`$(){}]', part):
+                return False, "Аргумент содержит недопустимые символы"
+
+        i += 1
 
     return True, "", parts
 
