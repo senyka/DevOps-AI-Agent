@@ -10,6 +10,7 @@ from agent.graph import compile_graph, AgentState
 from agent.schemas import QueryRequest, QueryResponse, AuditResponse
 from agent.memory import init_stores, store_audit_log
 from agent.cli import app as cli_app
+from agent.utils import generate_audit_id
 
 # === Метрики Prometheus ===
 REQUEST_COUNT = Counter("agent_requests_total", "Total requests", ["endpoint", "status"])
@@ -194,7 +195,4 @@ async def check_postgres() -> bool:
         return True
     except:
         return False
-
-def generate_audit_id() -> str:
-    return hashlib.sha256(f"{uuid.uuid4()}{time.time()}".encode()).hexdigest()[:16]
 

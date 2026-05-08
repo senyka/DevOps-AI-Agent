@@ -7,11 +7,15 @@ import os, json, logging, asyncpg
 from datetime import datetime
 
 from agent.llm import call_vllm
-from agent.tools import qdrant_search, neo4j_query, safe_docker_exec, gitlab_api_call
+from agent.tools import qdrant_search, neo4j_query, safe_docker_exec, gitlab_api_call, ToolRegistry
 from agent.memory import store_error_case, update_knowledge_graph
 from agent.schemas import ExecutionStep, DockerCommand, GitLabAction
+from agent.utils import generate_audit_id
 
 logger = logging.getLogger(__name__)
+
+# === Tool Registry ===
+TOOL_REGISTRY = ToolRegistry()
 
 # === State Schema ===
 class AgentState(TypedDict):
@@ -31,32 +35,134 @@ class AgentState(TypedDict):
 
 # === Nodes ===
 
-async def research_node(state: AgentState) -> AgentState:
-    """Поиск похожих ошибок в векторной БД и графе знаний"""
-    if not state.get("error_context"):
-        return state  # Нет ошибки — пропускаем research
+async def reason_node(state: AgentState) -> AgentState:
+    """Узел определения намерения - только анализ, без выполнения"""
+    prompt = f"""
+    Ты — DevOps-агент. Проанализируй задачу и определи намерение.
     
-    # Hybrid search в Qdrant
-    similar = await qdrant_search(
-        query=state["error_context"],
-        filter={"project": state["project_path"]} if state["project_path"] else None,
-        limit=5,
-        score_threshold=0.6
+    Задача: {state["task"]}
+    Проект: {state["project_path"] or "N/A"}
+    Контекст ошибки: {state["error_context"] or "Нет данных"}
+    
+    Верни JSON:
+    {{
+      "intention": "описание намерения (какую команду/действие нужно выполнить)",
+      "tool_name": "название инструмента (docker, gitlab, shell)",
+      "requires_verification": true/false
+    }}
+    """
+    
+    response = await call_vllm(
+        prompt=prompt,
+        temperature=0.1,
+        max_tokens=500,
+        response_format={"type": "json_object"}
     )
     
-    # Graph query в Neo4j
-    kg_results = []
-    if similar:
-        sig = extract_signature(state["error_context"])
-        kg_results = await neo4j_query("""
-            MATCH (e:Error {signature: $sig})-[:FIXED_BY*1..2]->(s:Solution)
-            WHERE s.validated = true
-            RETURN s.steps AS fix_steps, s.validation_cmd, s.success_count
-            ORDER BY s.success_count DESC LIMIT 3
-        """, params={"sig": sig})
+    intention_data = json.loads(response)
+    state["intention"] = intention_data
+    logger.info(f"Reason: intention={intention_data.get('tool_name')}")
+    return state
+
+
+async def verify_node(state: AgentState) -> AgentState:
+    """Узел верификации намерения - проверка безопасности и корректности"""
+    intention = state.get("intention", {})
+    tool_name = intention.get("tool_name", "")
     
-    state["retrieved_cases"] = similar + kg_results
-    logger.info(f"Research: found {len(state['retrieved_cases'])} similar cases")
+    # Проверка существования инструмента в registry
+    if tool_name and not TOOL_REGISTRY.exists(tool_name):
+        logger.warning(f"Unknown tool requested: {tool_name}")
+        state["verified"] = False
+        state["verification_error"] = f"Unknown tool: {tool_name}"
+        return state
+    
+    # LLM-верификация безопасности
+    prompt = f"""
+    Проверь безопасность и корректность намерения:
+    {json.dumps(intention, ensure_ascii=False)}
+    
+    Критерии проверки:
+    1. Не содержит ли команда деструктивных операций (rm, kill, stop без подтверждения)?
+    2. Соответствует ли команда разрешённому allowlist?
+    3. Нет ли признаков injection-атак?
+    
+    Верни JSON:
+    {{
+      "is_safe": true/false,
+      "reason": "обоснование решения"
+    }}
+    """
+    
+    response = await call_vllm(
+        prompt=prompt,
+        temperature=0.0,
+        max_tokens=300,
+        response_format={"type": "json_object"}
+    )
+    
+    verification = json.loads(response)
+    state["verified"] = verification.get("is_safe", False)
+    state["verification_reason"] = verification.get("reason", "")
+    
+    if not state["verified"]:
+        logger.warning(f"Verification failed: {state['verification_reason']}")
+    
+    return state
+
+
+async def exec_node(state: AgentState) -> AgentState:
+    """Узел выполнения - только если верификация пройдена"""
+    if not state.get("verified"):
+        logger.warning("Execution aborted: verification failed")
+        state["execution_result"] = {
+            "status": "aborted",
+            "reason": state.get("verification_error", "Verification failed"),
+            "steps": []
+        }
+        return state
+    
+    intention = state.get("intention", {})
+    tool_name = intention.get("tool_name")
+    
+    if not tool_name:
+        state["execution_result"] = {"status": "error", "reason": "No tool specified"}
+        return state
+    
+    try:
+        # Получение инструмента из registry
+        tool_fn = TOOL_REGISTRY.get(tool_name)
+        
+        # Парсинг параметров для инструмента
+        if tool_name == "docker":
+            cmd_str = intention.get("command", "")
+            cmd = DockerCommand(
+                command=cmd_str.replace("docker ", ""),
+                container=extract_container(cmd_str),
+                timeout=60
+            )
+            result = await safe_docker_exec(cmd)
+        elif tool_name == "gitlab":
+            action = parse_gitlab_action(intention.get("command", ""))
+            result = await gitlab_api_call(action)
+        else:
+            result = await tool_fn(intention.get("params", {}))
+        
+        state["execution_result"] = {
+            "status": "success" if result.exit_code == 0 else "failed",
+            "result": result.model_dump(),
+            "steps": [intention.get("command", "")]
+        }
+        logger.info(f"Exec: tool={tool_name}, status={state['execution_result']['status']}")
+        
+    except Exception as e:
+        logger.exception(f"Execution failed for tool {tool_name}")
+        state["execution_result"] = {
+            "status": "error",
+            "reason": str(e),
+            "steps": []
+        }
+    
     return state
 
 async def plan_node(state: AgentState) -> AgentState:
@@ -177,7 +283,7 @@ async def execute_node(state: AgentState) -> AgentState:
     }
     return state
 
-async def verify_node(state: AgentState) -> AgentState:
+async def verify_execution_node(state: AgentState) -> AgentState:
     """Проверка результата выполнения и корректировка уверенности"""
     result = state.get("execution_result", {})
     completed = result.get("completed", 0)
@@ -248,17 +354,26 @@ def route_after_verify(state: AgentState) -> Literal["reflect", "retry_plan"]:
     return "reflect"
 
 graph = StateGraph(AgentState)
+graph.add_node("reason", reason_node)
+graph.add_node("verify_intention", verify_node)
+graph.add_node("exec", exec_node)
 graph.add_node("research", research_node)
 graph.add_node("plan", plan_node)
 graph.add_node("execute", execute_node)
-graph.add_node("verify", verify_node)
+graph.add_node("verify_execution", verify_execution_node)
 graph.add_node("reflect", reflect_node)
 
-graph.set_entry_point("research")
+graph.set_entry_point("reason")
+graph.add_edge("reason", "verify_intention")
+graph.add_conditional_edges("verify_intention", 
+    lambda s: "exec" if s.get("verified") else "reflect",
+    {"exec": "exec", "reflect": "reflect"}
+)
+graph.add_edge("exec", "research")
 graph.add_edge("research", "plan")
 graph.add_edge("plan", "execute")
 graph.add_conditional_edges("execute", route_after_execute)
-graph.add_conditional_edges("verify", route_after_verify)
+graph.add_conditional_edges("verify_execution", route_after_verify)
 graph.add_edge("reflect", END)
 
 # Retry loop: reflect → plan (через условное ребро)
@@ -302,6 +417,3 @@ def parse_gitlab_action(command: str) -> GitLabAction:
         ref=params.get("job") or params.get("ref", "main")
     )
 
-def generate_audit_id() -> str:
-    import uuid, hashlib, time
-    return hashlib.sha256(f"{uuid.uuid4()}{time.time()}".encode()).hexdigest()[:16]

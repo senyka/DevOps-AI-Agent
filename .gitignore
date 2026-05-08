@@ -1,17 +1,50 @@
 ```
-# Kubernetes related ignores
-.kube/
-.kubectl/
-helm/
-charts/
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+*.pot
+*.pyc
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.hypothesis/
 
-# Configuration and deployment artifacts
-*.kubeconfig
-kubectl/
-kubectx/
+# Logs
+*.log
 
-# Deployment scripts and config
-*.sh
-*.yaml
-*.yml
+# Environment variables
+.env
+.env.local
+.env.*
+!env.sample
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
 ```
