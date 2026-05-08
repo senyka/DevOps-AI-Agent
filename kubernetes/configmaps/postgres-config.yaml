@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config
+  namespace: devops-agent
+data:
+  POSTGRES_DB: "devops_db"
+  POSTGRES_USER: "devops"
+  POSTGRES_PORT: "5432"
