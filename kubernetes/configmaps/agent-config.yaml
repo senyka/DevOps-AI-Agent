@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-config
+  namespace: devops-agent
+data:
+  LOG_LEVEL: "INFO"
+  NEO4J_URI: "bolt://neo4j.devops-agent.svc.cluster.local:7687"
+  QDRANT_URL: "http://qdrant.devops-agent.svc.cluster.local:6333"
+  DATABASE_HOST: "postgres.devops-agent.svc.cluster.local"
+  DATABASE_PORT: "5432"
+  DATABASE_NAME: "devops_db"
+  DATABASE_USER: "devops"
+  REDIS_HOST: "redis.devops-agent.svc.cluster.local"
+  REDIS_PORT: "6379"
+  DOCKER_EXECUTOR_URL: "http://docker-executor.devops-agent.svc.cluster.local:5001"
+  LLM_API_BASE: "http://vllm.devops-agent.svc.cluster.local:8000/v1"
+  VAULT_ADDR: "http://vault.devops-agent.svc.cluster.local:8200"
+  VAULT_ROLE: "devops-agent"
+  VAULT_KV_MOUNT: "secret"
