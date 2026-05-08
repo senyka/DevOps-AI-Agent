@@ -1,3 +1,4 @@
+```
 # Python
 __pycache__/
 *.pyc
@@ -7,64 +8,29 @@ __pycache__/
 env/
 venv/
 .venv/
-pip-log.txt
-pip-delete-this-directory.txt
-.tox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.log
-*.pot
-*.pyc
-*.pyo
-*.pyd
-*.so
-*.egg-info/
-.eggs/
-.pytest_cache/
-.mypy_cache/
-.hypothesis/
+.ENV
+.venv.bak
+.env.bak
 
 # Logs
 *.log
 
-# Environment variables
-.env
-.env.local
-.env.*
-!env.sample
-
 # IDE
 .vscode/
 .idea/
-*.swp
-*.swo
 
-# OS
-.DS_Store
-Thumbs.db
-
-# Dependencies
-.venv/
-venv/
-env/
+# Environment
 .env
 .env.local
-.env.*
+*.env.*
 
-# Logs and temp files
-*.log
-*.tmp
-*.swp
+# Coverage
+.coverage
+htmlcov/
+coverage/
 
-# Editors
-.vscode/
-.idea/
-
-# Build artifacts
-build/
+# Distribution / packaging
 dist/
+build/
 *.egg-info/
+```
