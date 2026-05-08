@@ -1,0 +1,86 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vault-auth-config
+  namespace: vault
+data:
+  setup-auth.sh: |
+    #!/bin/sh
+    set -e
+    until vault status -format=json > /dev/null 2>&1; do
+      sleep 2
+    done
+    vault secrets enable -path=secret kv-v2 || true
+    vault auth enable kubernetes || true
+    vault write auth/kubernetes/config \
+      kubernetes_host="https://$KUBERNETES_PORT_443_TCP_ADDR:443" \
+      kubernetes_ca_cert=@/var/run/secrets/kubernetes.io/serviceaccount/ca.crt || true
+    vault policy write devops-agent-policy - <<EOF
+    path "secret/data/devops/*" {
+      capabilities = ["read", "list"]
+    }
+    path "secret/metadata/devops/*" {
+      capabilities = ["list"]
+    }
+    path "secret/data/database/*" {
+      capabilities = ["read"]
+    }
+    path "secret/data/redis/*" {
+      capabilities = ["read"]
+    }
+    EOF
+    vault write auth/kubernetes/role/devops-agent \
+      bound_service_account_names=devops-agent-sa,vault-agent \
+      bound_service_account_namespaces=devops-agent \
+      policies=devops-agent-policy \
+      ttl=24h || true
+    vault write auth/kubernetes/role/worker \
+      bound_service_account_names=worker-sa \
+      bound_service_account_namespaces=devops-agent \
+      policies=devops-agent-policy \
+      ttl=24h || true
+    vault kv put secret/data/devops/database \
+      postgres_password="changeme_postgres_password" \
+      neo4j_password="changeme_neo4j_password" \
+      gitlab_token="changeme_gitlab_token" || true
+    vault kv put secret/data/devops/redis \
+      password="changeme_redis_password" || true
+    echo "Vault authentication configured successfully!"
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: vault-setup
+  namespace: vault
+spec:
+  template:
+    spec:
+      serviceAccountName: vault
+      containers:
+        - name: vault-setup
+          image: hashicorp/vault:1.15.4
+          command:
+            - /bin/sh
+            - /scripts/setup-auth.sh
+          env:
+            - name: VAULT_ADDR
+              value: "https://vault-active.vault.svc.cluster.local:8200"
+            - name: VAULT_SKIP_VERIFY
+              value: "true"
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            runAsNonRoot: true
+            runAsUser: 1000
+      volumes:
+        - name: scripts
+          configMap:
+            name: vault-auth-config
+            defaultMode: 0755
+      restartPolicy: OnFailure
+  backoffLimit: 5
