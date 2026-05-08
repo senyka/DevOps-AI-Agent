@@ -214,24 +214,24 @@ sequenceDiagram
     participant U as 👤 Пользователь
     participant C as 💻 CLI/API
     participant G as 📄 graph.py
-    participant R as 🧠 reason_node
+    participant R as  reason_node
     participant V as 🔐 verify_node
     participant M as 💾 Memory
     participant L as 🤖 LLM
     participant T as 🛠️ Tools
-    participant S as 🔒 Security
+    participant S as  Security
     participant E as 🐳 Executor
     participant X as 🌍 External
 
     rect rgb(200, 220, 255)
-    note over U,C: 1️⃣ Инициализация запроса
+    note over U,C: "1️⃣ Инициализация запроса"
     U->>C: ask "почему упал pod frontend?"
     C->>G: create_initial_state(query, session_id)
     activate G
     end
 
-    rect rgb(220, 255, 220)
-    note over G,R: 2️⃣ Reasoning фаза
+    rect rgb(200, 220, 255)
+    note over G,R: "2️⃣ Reasoning фаза"
     G->>R: process(state)
     activate R
     R->>M: retrieve_context(session_id, query)
@@ -246,8 +246,8 @@ sequenceDiagram
     deactivate R
     end
 
-    rect rgb(255, 240, 200)
-    note over G,V: 3️⃣ Verification фаза
+    rect rgb(200, 220, 255)
+    note over G,V: "3️⃣ Verification фаза"
     G->>V: verify_node(state)
     activate V
     V->>S: check_action(intention.tool)
@@ -259,8 +259,8 @@ sequenceDiagram
     deactivate V
     end
 
-    rect rgb(255, 220, 220)
-    note over G,T,E: 4️⃣ Execution фаза
+    rect rgb(200, 220, 255)
+    note over G,E: "4️ Execution фаза"
     G->>T: exec_node(state)
     activate T
     T->>E: POST /execute {cmd: "kubectl logs..."}
@@ -276,8 +276,8 @@ sequenceDiagram
     deactivate T
     end
 
-    rect rgb(240, 220, 255)
-    note over G,S,M: 5️⃣ Post-execution & Audit
+    rect rgb(200, 220, 255)
+    note over G,M: "5️⃣ Post-execution & Audit"
     G->>S: audit_log(action, params, result)
     activate S
     S->>M: Neo4j CREATE (:Audit {...})
@@ -293,7 +293,7 @@ sequenceDiagram
     end
 
     C-->>U: 📝 Ответ + рекомендации
-    note right of U: 💡 Предложить fix?
+    note right of U: " Предложить fix?"
 ```
 
 ---
