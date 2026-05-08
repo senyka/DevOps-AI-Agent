@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  namespace: devops-agent
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: worker
+      mtls-enabled: "true"
+  template:
+    metadata:
+      labels:
+        app: worker
+        mtls-enabled: "true"
+    spec:
+      serviceAccountName: devops-agent-sa
+      containers:
+        - name: worker
+          image: devops-worker:latest
+          imagePullPolicy: Always
+          envFrom:
+            - configMapRef:
+                name: agent-config
+          env:
+            - name: CELERY_BROKER_URL
+              value: "redis://:$(REDIS_PASSWORD)@redis.devops-agent.svc.cluster.local:6379/0"
+            - name: DATABASE_URL
+              value: "postgresql://devops:$(POSTGRES_PASSWORD)@postgres.devops-agent.svc.cluster.local:5432/devops_db"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secrets
+                  key: POSTGRES_PASSWORD
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-secrets
+                  key: REDIS_PASSWORD
+          volumeMounts:
+            - name: tls-certs
+              mountPath: /etc/tls
+              readOnly: true
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "500m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: tls-certs
+          secret:
+            secretName: worker-tls-secret
+            optional: true
