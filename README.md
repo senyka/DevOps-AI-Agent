@@ -38,7 +38,7 @@
 ---
 # 🧠 Архитектура
 
-![shema](/img/shema1.png)
+![shema](/img/shema2.png)
 
 ## 🏗️ Высокоуровневая архитектура системы
 
@@ -328,9 +328,7 @@ sequenceDiagram
 DevOps-AI-Agent/
 ├── 📄 .env.example                    # Шаблон переменных окружения
 ├── 📄 .gitignore                      # Правила исключения файлов из Git
-├── 📄 ARCHITECTURE.md                 # 🆕 Детальное описание архитектуры (8.3 KB)
 ├── 📄 LICENSE                         # Лицензия MIT
-├── 📄 MIGRATION_REPORT.md             # 🆕 Отчёт о миграции и исправлениях (9.5 KB)
 ├── 📄 README.md                       # Основная документация
 ├── 📄 docker-compose.yml              # Оркестрация: agent, vllm, neo4j, qdrant, executor, monitoring
 │
