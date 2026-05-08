@@ -223,14 +223,14 @@ sequenceDiagram
     participant E as 🐳 Executor
     participant X as 🌍 External
 
-    rect rgb(200, 220, 255)
+    rect rgb(0, 128, 128)
     note over U,C: "1️⃣ Инициализация запроса"
     U->>C: ask "почему упал pod frontend?"
     C->>G: create_initial_state(query, session_id)
     activate G
     end
 
-    rect rgb(200, 220, 255)
+    rect rgb(0, 128, 128)
     note over G,R: "2️⃣ Reasoning фаза"
     G->>R: process(state)
     activate R
@@ -246,7 +246,7 @@ sequenceDiagram
     deactivate R
     end
 
-    rect rgb(200, 220, 255)
+    rect rgb(0, 128, 128)
     note over G,V: "3️⃣ Verification фаза"
     G->>V: verify_node(state)
     activate V
@@ -259,7 +259,7 @@ sequenceDiagram
     deactivate V
     end
 
-    rect rgb(200, 220, 255)
+    rect rgb(0, 128, 128)
     note over G,E: "4️ Execution фаза"
     G->>T: exec_node(state)
     activate T
@@ -276,7 +276,7 @@ sequenceDiagram
     deactivate T
     end
 
-    rect rgb(200, 220, 255)
+    rect rgb(0, 128, 128)
     note over G,M: "5️⃣ Post-execution & Audit"
     G->>S: audit_log(action, params, result)
     activate S
