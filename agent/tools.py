@@ -1,6 +1,6 @@
 # agent/tools.py
 import os, re, json, asyncio, logging
-from typing import Optional, Union
+from typing import Optional, Union, Callable, Dict
 from pydantic import BaseModel, Field, validator
 import httpx, asyncpg
 from datetime import datetime
@@ -18,6 +18,51 @@ NEO4J_URI = os.getenv("NEO4J_URI", "bolt://neo4j:7687")
 NEO4J_USER = os.getenv("NEO4J_USERNAME", "neo4j")
 NEO4J_PASS = os.getenv("NEO4J_PASSWORD")
 DOCKER_EXECUTOR_URL = os.getenv("DOCKER_EXECUTOR_URL", "http://docker-executor:5001")
+
+# === Tool Registry ===
+
+class ToolRegistry:
+    """Реестр инструментов для предотвращения галлюцинаций LLM"""
+    
+    def __init__(self):
+        self.tools: Dict[str, Callable] = {}
+        self._register_default_tools()
+    
+    def _register_default_tools(self):
+        """Регистрация стандартных инструментов"""
+        self.register("docker", safe_docker_exec)
+        self.register("gitlab", gitlab_api_call)
+        self.register("qdrant_search", qdrant_search_wrapper)
+        self.register("neo4j_query", neo4j_query_wrapper)
+    
+    def register(self, name: str, fn: Callable):
+        """Регистрация инструмента"""
+        self.tools[name] = fn
+        logger.debug(f"Registered tool: {name}")
+    
+    def get(self, name: str) -> Callable:
+        """Получение инструмента по имени"""
+        if name not in self.tools:
+            raise ValueError(f"Unknown tool: {name}. Available: {list(self.tools.keys())}")
+        return self.tools[name]
+    
+    def exists(self, name: str) -> bool:
+        """Проверка существования инструмента"""
+        return name in self.tools
+    
+    def list_tools(self) -> list:
+        """Список всех зарегистрированных инструментов"""
+        return list(self.tools.keys())
+
+
+# Wrapper функции для registry
+async def qdrant_search_wrapper(params: dict) -> dict:
+    """Wrapper для qdrant_search"""
+    return await qdrant_search(**params)
+
+async def neo4j_query_wrapper(params: dict) -> dict:
+    """Wrapper для neo4j_query"""
+    return await neo4j_query(**params)
 
 # === Qdrant ===
 

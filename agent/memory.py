@@ -16,17 +16,12 @@ async def init_stores():
     """Инициализация соединений с хранилищами"""
     global _stores
     
-    # PostgreSQL
-    _stores["postgres"] = await asyncpg.create_pool(
-        os.environ["DATABASE_URL"],
-        min_size=2,
-        max_size=10,
-        command_timeout=30
-    )
+    # PostgreSQL - используем контекстный менеджер при необходимости
+    _stores["postgres_dsn"] = os.environ["DATABASE_URL"]
     
     # Qdrant (через клиент)
     _stores["qdrant"] = None  # Будет создан через контекстный менеджер
-    
+
     # Neo4j
     _stores["neo4j_uri"] = os.getenv("NEO4J_URI")
     _stores["neo4j_username"] = os.getenv("NEO4J_USERNAME", "neo4j")
@@ -37,67 +32,89 @@ async def init_stores():
 # === Error Cases (PostgreSQL) ===
 
 async def store_error_case(case: dict) -> str:
-    """Сохранение кейса ошибки в PostgreSQL"""
-    async with _stores["postgres"].acquire() as conn:
-        row = await conn.fetchrow("""
-            INSERT INTO error_cases (
-                signature, stacktrace, context, fix_steps, 
-                validation_cmd, rollback_cmd, project, status
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            RETURNING id, created_at
-        """,
-            case.get("signature"),
-            case.get("stacktrace"),
-            json.dumps(case.get("context", {})),
-            case.get("fix_steps", []),
-            case.get("validation_cmd"),
-            case.get("rollback_cmd"),
-            case.get("project"),
-            case.get("status", "pending")
-        )
-        return str(row["id"])
+    """Сохранение кейса ошибки в PostgreSQL с proper resource management"""
+    dsn = _stores.get("postgres_dsn")
+    if not dsn:
+        raise RuntimeError("PostgreSQL DSN not configured")
+    
+    async with managed_postgres_pool(dsn) as pool:
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow("""
+                INSERT INTO error_cases (
+                    signature, stacktrace, context, fix_steps, 
+                    validation_cmd, rollback_cmd, project, status
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                RETURNING id, created_at
+            """,
+                case.get("signature"),
+                case.get("stacktrace"),
+                json.dumps(case.get("context", {})),
+                case.get("fix_steps", []),
+                case.get("validation_cmd"),
+                case.get("rollback_cmd"),
+                case.get("project"),
+                case.get("status", "pending")
+            )
+            return str(row["id"])
 
-async def search_error_cases(query: str, project: Optional[str] = None, limit: int = 10) -> list[dict]:
-    """Поиск кейсов по тексту + проекту"""
-    async with _stores["postgres"].acquire() as conn:
-        rows = await conn.fetch("""
-            SELECT id, signature, fix_steps, status, created_at,
-                   ts_rank_cd(search_vector, websearch_to_tsquery('russian', $1)) AS rank
-            FROM error_cases
-            WHERE status = 'success'
-              AND ($2::text IS NULL OR project = $2)
-            ORDER BY rank DESC, created_at DESC
-            LIMIT $3
-        """, query, project, limit)
-        
-        return [dict(r) for r in rows]
+
+async def search_error_cases(query: str, project: Optional[str] = None, limit: int = 10) -> list:
+    """Поиск кейсов по тексту + проекту с дедупликацией"""
+    dsn = _stores.get("postgres_dsn")
+    if not dsn:
+        raise RuntimeError("PostgreSQL DSN not configured")
+    
+    async with managed_postgres_pool(dsn) as pool:
+        async with pool.acquire() as conn:
+            rows = await conn.fetch("""
+                SELECT id, signature, fix_steps, status, created_at,
+                       ts_rank_cd(search_vector, websearch_to_tsquery('russian', $1)) AS rank
+                FROM error_cases
+                WHERE status = 'success'
+                  AND ($2::text IS NULL OR project = $2)
+                ORDER BY rank DESC, created_at DESC
+                LIMIT $3
+            """, query, project, limit)
+            
+            # Дедупликация результатов
+            return dedupe_memory([dict(r) for r in rows])
 
 # === Audit Log ===
 
 async def store_audit_log(audit_id: str, input: dict, output: dict, metadata: dict):
-    """Сохранение аудита выполнения"""
-    async with _stores["postgres"].acquire() as conn:
-        await conn.execute("""
-            INSERT INTO audit_log (
-                audit_id, input_data, output_data, metadata, 
-                confidence, execution_time, created_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, NOW())
-        """,
-            audit_id,
-            json.dumps(input),
-            json.dumps(output),
-            json.dumps(metadata),
-            output.get("confidence"),
-            output.get("execution_time")
-        )
+    """Сохранение аудита выполнения с proper resource management"""
+    dsn = _stores.get("postgres_dsn")
+    if not dsn:
+        raise RuntimeError("PostgreSQL DSN not configured")
+    
+    async with managed_postgres_pool(dsn) as pool:
+        async with pool.acquire() as conn:
+            await conn.execute("""
+                INSERT INTO audit_log (
+                    audit_id, input_data, output_data, metadata, 
+                    confidence, execution_time, created_at
+                ) VALUES ($1, $2, $3, $4, $5, $6, NOW())
+            """,
+                audit_id,
+                json.dumps(input),
+                json.dumps(output),
+                json.dumps(metadata),
+                output.get("confidence"),
+                output.get("execution_time")
+            )
 
 async def get_audit_log(audit_id: str) -> Optional[dict]:
-    """Получение аудита по ID"""
-    async with _stores["postgres"].acquire() as conn:
-        row = await conn.fetchrow("""
-            SELECT * FROM audit_log WHERE audit_id = $1
-        """, audit_id)
-        return dict(row) if row else None
+    """Получение аудита по ID с proper resource management"""
+    dsn = _stores.get("postgres_dsn")
+    if not dsn:
+        raise RuntimeError("PostgreSQL DSN not configured")
+    
+    async with managed_postgres_pool(dsn) as pool:
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow("""
+                SELECT * FROM audit_log WHERE audit_id = $1
+            """, audit_id)
+            return dict(row) if row else None
 
 # === Knowledge Graph (Neo4j) ===
 
@@ -135,6 +152,7 @@ async def update_knowledge_graph(error_sig: str, fix_steps: list[str], root_caus
 # === Cleanup ===
 
 async def close_stores():
+
     """Закрытие соединений"""
     if "postgres" in _stores:
         await _stores["postgres"].close()
