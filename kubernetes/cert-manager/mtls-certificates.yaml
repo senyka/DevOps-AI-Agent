@@ -1,0 +1,218 @@
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: vault-ca-issuer
+spec:
+  ca:
+    secretName: vault-ca-key-pair
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: vault-tls
+  namespace: vault
+spec:
+  secretName: vault-tls
+  duration: 8760h
+  renewBefore: 720h
+  subject:
+    organizations:
+      - devops-agent
+  isCA: false
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 4096
+  usages:
+    - server auth
+    - client auth
+  dnsNames:
+    - vault.vault.svc.cluster.local
+    - vault-active.vault.svc.cluster.local
+    - vault-0.vault.vault.svc.cluster.local
+    - vault-1.vault.vault.svc.cluster.local
+    - vault-2.vault.vault.svc.cluster.local
+    - localhost
+  ipAddresses:
+    - 127.0.0.1
+  issuerRef:
+    name: vault-ca-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: vault-agent-injector-certs
+  namespace: vault
+spec:
+  secretName: vault-agent-injector-certs
+  duration: 8760h
+  renewBefore: 720h
+  subject:
+    organizations:
+      - devops-agent
+  isCA: false
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 2048
+  usages:
+    - server auth
+    - client auth
+  dnsNames:
+    - vault-agent-injector-svc
+    - vault-agent-injector-svc.vault
+    - vault-agent-injector-svc.vault.svc
+    - vault-agent-injector-svc.vault.svc.cluster.local
+    - localhost
+  issuerRef:
+    name: vault-ca-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: devops-agent-mtls
+  namespace: devops-agent
+spec:
+  secretName: devops-agent-mtls
+  duration: 8760h
+  renewBefore: 720h
+  subject:
+    organizations:
+      - devops-agent
+  isCA: false
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 2048
+  usages:
+    - server auth
+    - client auth
+  dnsNames:
+    - agent.devops-agent.svc.cluster.local
+    - worker.devops-agent.svc.cluster.local
+    - docker-executor.devops-agent.svc.cluster.local
+    - localhost
+  issuerRef:
+    name: vault-ca-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: redis-mtls
+  namespace: devops-agent
+spec:
+  secretName: redis-mtls
+  duration: 8760h
+  renewBefore: 720h
+  subject:
+    organizations:
+      - devops-agent
+  isCA: false
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 2048
+  usages:
+    - server auth
+    - client auth
+  dnsNames:
+    - redis.devops-agent.svc.cluster.local
+    - redis
+    - localhost
+  issuerRef:
+    name: vault-ca-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: postgres-mtls
+  namespace: devops-agent
+spec:
+  secretName: postgres-mtls
+  duration: 8760h
+  renewBefore: 720h
+  subject:
+    organizations:
+      - devops-agent
+  isCA: false
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 2048
+  usages:
+    - server auth
+    - client auth
+  dnsNames:
+    - postgres.devops-agent.svc.cluster.local
+    - postgres
+    - localhost
+  issuerRef:
+    name: vault-ca-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: neo4j-mtls
+  namespace: devops-agent
+spec:
+  secretName: neo4j-mtls
+  duration: 8760h
+  renewBefore: 720h
+  subject:
+    organizations:
+      - devops-agent
+  isCA: false
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 2048
+  usages:
+    - server auth
+    - client auth
+  dnsNames:
+    - neo4j.devops-agent.svc.cluster.local
+    - neo4j
+    - localhost
+  issuerRef:
+    name: vault-ca-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: qdrant-mtls
+  namespace: devops-agent
+spec:
+  secretName: qdrant-mtls
+  duration: 8760h
+  renewBefore: 720h
+  subject:
+    organizations:
+      - devops-agent
+  isCA: false
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 2048
+  usages:
+    - server auth
+    - client auth
+  dnsNames:
+    - qdrant.devops-agent.svc.cluster.local
+    - qdrant
+    - localhost
+  issuerRef:
+    name: vault-ca-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
