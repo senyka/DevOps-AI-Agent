@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: neo4j
+  namespace: devops-agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: neo4j
+  template:
+    metadata:
+      labels:
+        app: neo4j
+    spec:
+      containers:
+        - name: neo4j
+          image: neo4j:5.12
+          ports:
+            - containerPort: 7687
+              name: bolt
+            - containerPort: 7474
+              name: browser
+          envFrom:
+            - configMapRef:
+                name: neo4j-config
+            - secretRef:
+                name: neo4j-secrets
+          volumeMounts:
+            - name: neo4j-data
+              mountPath: /data
+            - name: neo4j-config
+              mountPath: /etc/neo4j/neo4j.conf
+              subPath: neo4j.conf
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "500m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 7474
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: neo4j-data
+          persistentVolumeClaim:
+            claimName: neo4j-pvc
+        - name: neo4j-config
+          configMap:
+            name: neo4j-config-file
