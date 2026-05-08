@@ -7,6 +7,7 @@ from datetime import datetime
 
 from agent.schemas import DockerCommand, GitLabAction, ExecutionResult
 from agent.security.docker_validator import validate_docker_command, sanitize_container_name
+from agent.utils import managed_qdrant_client
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +35,7 @@ async def qdrant_search(
     model = SentenceTransformer("BAAI/bge-m3", cache_folder="/models")
     dense_vec = model.encode(query, normalize_embeddings=True).tolist()
     
-    async with AsyncQdrantClient(url=QDRANT_URL) as client:
+    async with managed_qdrant_client(QDRANT_URL) as client:
         # Hybrid search
         results = await client.search(
             collection_name="devops_errors",
@@ -201,9 +202,11 @@ async def gitlab_api_call(action: GitLabAction) -> ExecutionResult:
 
 async def safe_shell_exec(command: str, timeout: int = 30) -> ExecutionResult:
     """Выполнение shell-команд с ограничениями (только read-only)"""
+    # Синхронизировано с docker_validator.AllowedCommand
     allowed_prefixes = [
         "cat ", "ls ", "df ", "du ", "grep ", "find ", 
-        "docker logs", "docker inspect", "docker stats",
+        "docker ps", "docker logs", "docker inspect", 
+        "docker stats", "docker version", "docker info",
         "journalctl ", "systemctl status ", "ps ", "top -b"
     ]
     
