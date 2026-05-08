@@ -79,6 +79,188 @@
 │  └─────────────────────────────────────────┘        │
 └─────────────────────────────────────────────────────┘
 ```
+# 🏗️ Схема архитектуры DevOps-AI-Agent
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#1a1a2e', 'primaryTextColor': '#fff', 'primaryBorderColor': '#4a4a6a', 'lineColor': '#6a6a9a', 'secondaryColor': '#16213e', 'tertiaryColor': '#0f3460' }}}%%
+
+graph TB
+    %% ==================== ПОЛЬЗОВАТЕЛЬСКИЙ СЛОЙ ====================
+    subgraph UserLayer ["👤 Пользовательский слой"]
+        CLI["💻 CLI / API<br/>(ask, fix, memory)"]
+        WebUI["🌐 Web UI<br/>(опционально)"]
+    end
+
+    %% ==================== ЯДРО АГЕНТА ====================
+    subgraph AgentCore ["🤖 Ядро AI-агента (agent/)"]
+        direction TB
+        
+        Main["📄 main.py<br/>Точка входа"]
+        Graph["📄 graph.py<br/>LangGraph State Machine"]
+        LLM["📄 llm.py<br/>LLM Provider<br/>(OpenAI / vLLM)"]
+        Memory["📄 memory.py<br/>Hybrid Memory"]
+        Tools["📄 tools.py<br/>DevOps Tools"]
+        Schemas["📄 schemas.py<br/>Pydantic Models"]
+        
+        Main --> Graph
+        Graph --> LLM
+        Graph --> Memory
+        Graph --> Tools
+        Graph --> Schemas
+        
+        subgraph CLI_Module ["📁 cli/"]
+            Ask["ask.py"]
+            Fix["fix.py"]
+            MemCtrl["memory.py"]
+        end
+        
+        subgraph Security ["🔐 security/"]
+            Approval["approval.py<br/>Human-in-the-Loop"]
+            DockerVal["docker_validator.py<br/>Command Allowlist"]
+            CypherSan["cypher_sanitizer.py<br/>Query Sanitization"]
+            Secrets["secrets.py<br/>Secrets Management"]
+            AuditLog["logging.py<br/>Masked Audit"]
+        end
+    end
+
+    %% ==================== ИЗОЛИРОВАННЫЙ ИСПОЛНИТЕЛЬ ====================
+    subgraph Executor ["🐳 docker-executor/ (Isolated)"]
+        ExecAPI["📄 app.py<br/>FastAPI HTTP Endpoint"]
+        ExecDocker["🐳 Docker CLI<br/>subprocess execution"]
+        ExecVal["✅ Input Validation<br/>Allowlist Check"]
+        
+        ExecAPI --> ExecVal
+        ExecVal --> ExecDocker
+    end
+
+    %% ==================== ХРАНИЛИЩА ДАННЫХ ====================
+    subgraph DataLayer ["💾 Data Layer"]
+        Neo4j[("🕸️ Neo4j<br/>Graph Memory<br/>- Incidents<br/>- Actions<br/>- Audit Trail")]
+        Qdrant[("🎯 Qdrant<br/>Vector Store<br/>- Embeddings<br/>- Semantic Search")]
+        Postgres[("🗄️ PostgreSQL<br/>Relational State<br/>- Users<br/>- Configs")]
+        
+        LoRA["📁 lora_adapters/<br/>devops_v1/<br/>Domain Fine-tuning"]
+    end
+
+    %% ==================== ВНЕШНИЕ СИСТЕМЫ ====================
+    subgraph External ["🌍 External Systems"]
+        GitLab["🔗 GitLab API<br/>(Issues, MR, CI)"]
+        K8s["☸️ Kubernetes API<br/>(pods, logs, events)"]
+        DockerReg["📦 Docker Registry<br/>(images, tags)"]
+        WebAPI["🌐 Web APIs<br/>(docs, status pages)"]
+        Slack["💬 Alert Channels<br/>(опционально)"]
+    end
+
+    %% ==================== МОНАРИНГ И БЕЗОПАСНОСТЬ ====================
+    subgraph Observability ["📊 Observability"]
+        Grafana["📈 Grafana Dashboards"]
+        Logs["📋 Structured Logs<br/>(audit.jsonl)"]
+        Guardrails["🛡️ NeMo Guardrails<br/>Prompt Injection Protection"]
+    end
+
+    %% ==================== ПОТОКИ ДАННЫХ ====================
+    %% Пользователь → Агент
+    CLI --> Main
+    WebUI --> Main
+    
+    %% Агент → Безопасность
+    Tools --> Approval
+    Approval -->|✅ Approved| Executor
+    Approval -->|❌ Rejected| AuditLog
+    
+    %% Агент → Хранилища
+    Memory <--> Neo4j
+    Memory <--> Qdrant
+    Memory <--> Postgres
+    
+    %% Агент → Внешние системы (через инструменты)
+    Tools --> GitLab
+    Tools --> K8s
+    Tools --> DockerReg
+    Tools --> WebAPI
+    
+    %% Безопасность → Исполнитель
+    DockerVal --> ExecAPI
+    CypherSan --> Neo4j
+    Secrets -.-> ExecAPI
+    
+    %% Исполнитель → Внешние
+    ExecDocker --> K8s
+    ExecDocker --> DockerReg
+    
+    %% Мониторинг
+    AuditLog --> Logs
+    Logs --> Grafana
+    Guardrails --> LLM
+    Guardrails --> Tools
+    
+    %% LoRA
+    LLM -.->|Load Adapter| LoRA
+
+    %% ==================== СТИЛИ ====================
+    classDef userLayer fill:#2d3436,stroke:#636e72,color:#fff
+    classDef agentCore fill:#0f3460,stroke:#4a69bd,color:#fff
+    classDef executor fill:#1e272e,stroke:#485460,color:#fff
+    classDef dataLayer fill:#192a56,stroke:#3c6382,color:#fff
+    classDef external fill:#3d3d3d,stroke:#707070,color:#fff,dashed
+    classDef observability fill:#2c2c54,stroke:#474787,color:#fff
+    
+    class CLI,WebUI userLayer
+    class Main,Graph,LLM,Memory,Tools,Schemas,CLI_Module,Security agentCore
+    class ExecAPI,ExecDocker,ExecVal executor
+    class Neo4j,Qdrant,Postgres,LoRA dataLayer
+    class GitLab,K8s,DockerReg,WebAPI,Slack external
+    class Grafana,Logs,Guardrails observability
+```
+
+---
+
+## 🔑 Ключевые архитектурные решения
+
+| Решение | Обоснование | Реализация |
+|---------|-------------|------------|
+| **🔐 Изолированный docker-executor** | Безопасность: агент не имеет прямого доступа к `docker.sock` | HTTP API + allowlist команд + валидация входных данных |
+| **🧠 Гибридная память** | Разные типы знаний требуют разных хранилищ | Neo4j (связи инцидентов), Qdrant (семантический поиск), Dict (кэш сессии) |
+| **👮 Human-in-the-Loop** | Критические действия требуют подтверждения | `approval.py` блокирует `rm`, `delete`, `destroy` без явного `--force` |
+| **🛡️ Guardrails на входе** | Защита от prompt injection и jailbreak | NeMo Guardrails фильтрует промпты до передачи в LLM |
+| **🧵 Асинхронная архитектура** | Параллельное выполнение инструментов | `asyncio.gather()` в `tools.py` для одновременных API-запросов |
+| **📦 Модульность через LangGraph** | Гибкое управление состоянием и ветвлением | Узлы графа = этапы рассуждения, рёбра = условия перехода |
+
+---
+
+## 🔄 Последовательность обработки запроса
+
+```mermaid
+sequenceDiagram
+    participant U as 👤 Пользователь
+    participant C as 💻 CLI
+    participant A as 🤖 Agent Core
+    participant S as 🔐 Security
+    participant E as 🐳 Executor
+    participant D as 💾 Data Layer
+    participant X as 🌍 External
+    
+    U->>C: ask "почему упал pod frontend?"
+    C->>A: main.py: initialize State
+    A->>A: graph.py: parse_intent()
+    A->>D: memory.py: retrieve_context(Neo4j+Qdrant)
+    D-->>A: возвращает связанные инциденты + docs
+    A->>A: llm.py: generate_plan(tools=[k8s_logs, k8s_events])
+    A->>S: security/approval.py: check_action(k8s_logs)
+    S-->>A: ✅ auto-approve (read-only)
+    A->>E: POST /execute {"cmd": "kubectl logs..."}
+    E->>E: docker_validator.py: allowlist_check()
+    E->>X: kubectl → Kubernetes API
+    X-->>E: возвращает логи
+    E-->>A: HTTP 200 + output
+    A->>A: graph.py: analyze_result()
+    A->>S: audit_log(action, params, result)
+    S->>D: Neo4j: CREATE (:Audit {timestamp, ...})
+    A->>C: format_response("Pod упал из-за OOM...")
+    C-->>U: показывает ответ + рекомендации
+```
+
+---
 
 ### Ключевые компоненты
 
