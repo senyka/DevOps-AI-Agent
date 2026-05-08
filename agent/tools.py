@@ -25,33 +25,33 @@ DOCKER_EXECUTOR_URL = os.getenv("DOCKER_EXECUTOR_URL", "http://docker-executor:5
 
 class ToolRegistry:
     """Реестр инструментов для предотвращения галлюцинаций LLM"""
-    
+
     def __init__(self):
         self.tools: Dict[str, Callable] = {}
         self._register_default_tools()
-    
+
     def _register_default_tools(self):
         """Регистрация стандартных инструментов"""
         self.register("docker", safe_docker_exec)
         self.register("gitlab", gitlab_api_call)
         self.register("qdrant_search", qdrant_search_wrapper)
         self.register("neo4j_query", neo4j_query_wrapper)
-    
+
     def register(self, name: str, fn: Callable):
         """Регистрация инструмента"""
         self.tools[name] = fn
         logger.debug(f"Registered tool: {name}")
-    
+
     def get(self, name: str) -> Callable:
         """Получение инструмента по имени"""
         if name not in self.tools:
             raise ValueError(f"Unknown tool: {name}. Available: {list(self.tools.keys())}")
         return self.tools[name]
-    
+
     def exists(self, name: str) -> bool:
         """Проверка существования инструмента"""
         return name in self.tools
-    
+
     def list_tools(self) -> list:
         """Список всех зарегистрированных инструментов"""
         return list(self.tools.keys())
@@ -77,11 +77,10 @@ async def qdrant_search(
     """Hybrid search: dense + sparse + metadata filter"""
     from qdrant_client import AsyncQdrantClient
     from sentence_transformers import SentenceTransformer
-    
+
     # Загрузка модели (кэшируется)
     model = SentenceTransformer("BAAI/bge-m3", cache_folder="/models")
     dense_vec = model.encode(query, normalize_embeddings=True).tolist()
-    
     async with managed_qdrant_client(QDRANT_URL) as client:
         # Hybrid search
         results = await client.search(
@@ -92,7 +91,7 @@ async def qdrant_search(
             score_threshold=score_threshold,
             with_payload=True
         )
-        
+
         return [
             {
                 "id": r.id,
@@ -110,22 +109,22 @@ async def qdrant_search(
 async def neo4j_query(cypher: str, params: Optional[dict] = None) -> list[dict]:
     """Выполнение Cypher-запроса с параметрами и валидацией безопасности"""
     from agent.security.cypher_sanitizer import is_cypher_safe, validate_cypher_params
-    
+
     # Валидация Cypher-запроса
     is_safe, error_msg = is_cypher_safe(cypher)
     if not is_safe:
         logger.warning(f"Cypher query blocked: {error_msg}")
         raise ValueError(f"Unsafe Cypher query: {error_msg}")
-    
+
     # Валидация параметров
     if params:
         params_valid, params_error = validate_cypher_params(params)
         if not params_valid:
             logger.warning(f"Cypher params blocked: {params_error}")
             raise ValueError(f"Unsafe Cypher params: {params_error}")
-    
+
     from neo4j import AsyncGraphDatabase
-    
+
     async with AsyncGraphDatabase.driver(
         NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASS)
     ) as driver:
@@ -149,10 +148,10 @@ async def safe_docker_exec(cmd: DockerCommand) -> ExecutionResult:
                 command=cmd.command,
                 timestamp=datetime.utcnow().isoformat()
             )
-        
+
         # Санитизация имени контейнера
         safe_container = sanitize_container_name(cmd.container)
-        
+
         # Отправка команды в docker-executor сервис
         async with httpx.AsyncClient(timeout=cmd.timeout + 30) as client:
             payload = {
@@ -164,7 +163,7 @@ async def safe_docker_exec(cmd: DockerCommand) -> ExecutionResult:
                 json=payload,
                 headers={"Content-Type": "application/json"}
             )
-            
+
             if resp.status_code != 200:
                 error_data = resp.json() if resp.content else {"error": "Unknown error"}
                 return ExecutionResult(
@@ -173,7 +172,7 @@ async def safe_docker_exec(cmd: DockerCommand) -> ExecutionResult:
                     command=cmd.command,
                     timestamp=datetime.utcnow().isoformat()
                 )
-            
+
             result_data = resp.json()
             return ExecutionResult(
                 stdout=result_data.get("output", ""),
@@ -182,7 +181,7 @@ async def safe_docker_exec(cmd: DockerCommand) -> ExecutionResult:
                 command=cmd.command,
                 timestamp=datetime.utcnow().isoformat()
             )
-        
+
     except asyncio.TimeoutError:
         return ExecutionResult(
             error=f"Command timed out after {cmd.timeout}s",
@@ -205,17 +204,17 @@ async def gitlab_api_call(action: GitLabAction) -> ExecutionResult:
     """Безопасный вызов GitLab API с логированием"""
     headers = {"PRIVATE-TOKEN": GITLAB_TOKEN}
     project_id = action.project_id if action.project_id.isdigit() else action.project_id.replace("/", "%2F")
-    
+
     endpoints = {
         "get_pipeline": f"/projects/{project_id}/pipelines?ref={action.ref}",
         "get_job_logs": f"/projects/{project_id}/jobs/{action.ref}/trace",
         "retry_job": f"/projects/{project_id}/jobs/{action.ref}/retry",
         "create_issue": f"/projects/{project_id}/issues"
     }
-    
+
     if action.action not in endpoints:
         return ExecutionResult(error=f"Unknown action: {action.action}", exit_code=-1)
-    
+
     async with httpx.AsyncClient(
         base_url=f"{GITLAB_URL}/api/v4",
         headers=headers,
@@ -225,7 +224,7 @@ async def gitlab_api_call(action: GitLabAction) -> ExecutionResult:
             method = "POST" if action.action in ["retry_job", "create_issue"] else "GET"
             resp = await client.request(method, endpoints[action.action])
             resp.raise_for_status()
-            
+
             return ExecutionResult(
                 data=resp.json() if resp.content else resp.text,
                 exit_code=0,
@@ -250,22 +249,21 @@ async def gitlab_api_call(action: GitLabAction) -> ExecutionResult:
 async def safe_shell_exec(command: str, timeout: int = 30) -> ExecutionResult:
     """✅ БЕЗОПАСНО: subprocess_exec + shlex + strict allowlist"""
     from agent.shared.docker_commands import AllowedShellCommand
-    
     try:
         # Парсим команду с учётом кавычек и экранирования
         args = shlex.split(command)
         if not args:
             return ExecutionResult(error="Empty command", success=False)
-        
+
         cmd_name = args[0]
-        
+
         # Строгая проверка по allowlist (не startsWith!)
         if cmd_name not in set(c.value for c in AllowedShellCommand):
             return ExecutionResult(
-                error=f"Command '{cmd_name}' not in allowlist", 
+                error=f"Command '{cmd_name}' not in allowlist",
                 success=False
             )
-        
+
         # Дополнительная защита: блокируем опасные аргументы
         dangerous_patterns = [';', '|', '&', '`', '$', '(', ')', '{', '}', '<', '>', '\n', '\r']
         for arg in args:
@@ -274,11 +272,10 @@ async def safe_shell_exec(command: str, timeout: int = 30) -> ExecutionResult:
                     error=f"Argument contains dangerous pattern: {arg}",
                     success=False
                 )
-        
+
         # Формируем команду с timeout БЕЗ shell=True
         # timeout — отдельная команда, а не часть строки
         full_cmd = ["timeout", str(timeout)] + args
-        
         proc = await asyncio.create_subprocess_exec(
             *full_cmd,  # ✅ list-аргументы, shell=False по умолчанию
             stdout=asyncio.subprocess.PIPE,
@@ -286,7 +283,6 @@ async def safe_shell_exec(command: str, timeout: int = 30) -> ExecutionResult:
             limit=4096
         )
         stdout, stderr = await proc.communicate()
-        
         return ExecutionResult(
             output=stdout.decode(errors='replace') if stdout else "",
             error=stderr.decode(errors='replace') if stderr else "",
@@ -306,7 +302,7 @@ async def validate_step_result(result: ExecutionResult, validation_cmd: str) -> 
     """Проверка результата шага через команду валидации"""
     if not validation_cmd:
         return result.exit_code == 0
-    
+
     # Выполняем команду валидации
     validation_result = await safe_shell_exec(validation_cmd, timeout=15)
     return validation_result.exit_code == 0 and "error" not in validation_result.stderr.lower()

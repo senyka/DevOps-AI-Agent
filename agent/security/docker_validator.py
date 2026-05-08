@@ -14,8 +14,27 @@ from agent.shared.docker_commands import (
     REQUIRES_APPROVAL_FLAGS
 )
 
+class AllowedCommand(str, Enum):
+    """Разрешённые Docker команды."""
+    PS = "ps"
+    LOGS = "logs"
+    INSPECT = "inspect"
+    VERSION = "version"
+    INFO = "info"
+    STATS = "stats"
 
-# Запрещённые подстроки в аргументах (дополнительно к проверкам в docker_commands)
+
+# Разрешённые флаги для каждой команды
+ALLOWED_FLAGS: dict[AllowedCommand, Set[str]] = {
+    AllowedCommand.PS: {"-a", "--all", "--format", "--filter", "--no-trunc", "-q", "--quiet", "-s", "--size"},
+    AllowedCommand.LOGS: {"--tail", "--since", "--until", "--timestamps", "-f", "--follow", "-n", "--details"},
+    AllowedCommand.INSPECT: {"--format", "--size", "-s"},
+    AllowedCommand.VERSION: set(),
+    AllowedCommand.INFO: {"--format"},
+    AllowedCommand.STATS: {"--format", "--no-stream", "-a", "--all"},
+}
+
+# Запрещённые подстроки в аргументах
 FORBIDDEN_SUBSTRINGS: List[str] = [
     "rm", "kill", "stop", "exec", "run", "build", "push", "pull", "rmi",
     "--force", "-f", "delete", "remove", "prune", "system"
