@@ -1,0 +1,81 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-config
+  namespace: devops-agent
+data:
+  redis.conf: |
+    # Redis Configuration for Caching and Rate Limiting
+    bind 0.0.0.0
+    port 6379
+    protected-mode yes
+    maxmemory 512mb
+    maxmemory-policy allkeys-lru
+    appendonly yes
+    appendfsync everysec
+    dir /data
+    requirepass ${REDIS_PASSWORD}
+    tcp-keepalive 300
+    timeout 0
+    tcp-backlog 511
+    loglevel notice
+    slowlog-log-slower-than 10000
+    slowlog-max-len 128
+    client-output-buffer-limit normal 0 0 0
+    client-output-buffer-limit replica 256mb 64mb 60
+    client-output-buffer-limit pubsub 32mb 8mb 60
+    cluster-enabled no
+    notify-keyspace-events Ex
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-rate-limit-scripts
+  namespace: devops-agent
+data:
+  rate_limit.lua: |
+    -- Rate Limiting Lua Script for Redis
+    local key = KEYS[1]
+    local limit = tonumber(ARGV[1])
+    local window = tonumber(ARGV[2])
+    local current = redis.call('GET', key)
+    if current == false then
+        redis.call('SET', key, 1, 'EX', window)
+        return {1, 1, window}
+    end
+    current = tonumber(current)
+    if current >= limit then
+        local ttl = redis.call('TTL', key)
+        return {0, current, ttl}
+    end
+    redis.call('INCR', key)
+    local ttl = redis.call('TTL', key)
+    return {1, current + 1, ttl}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-cache-scripts
+  namespace: devops-agent
+data:
+  cache_get.lua: |
+    -- Cache Get with Stats Tracking
+    local key = KEYS[1]
+    local stats_key = ARGV[1]
+    local value = redis.call('GET', key)
+    if value ~= false then
+        redis.call('HINCRBY', stats_key, 'hits', 1)
+        return value
+    else
+        redis.call('HINCRBY', stats_key, 'misses', 1)
+        return nil
+    end
+  cache_set.lua: |
+    -- Cache Set with TTL and Stats
+    local key = KEYS[1]
+    local value = ARGV[1]
+    local ttl = tonumber(ARGV[2])
+    local stats_key = ARGV[3]
+    redis.call('SET', key, value, 'EX', ttl)
+    redis.call('HINCRBY', stats_key, 'sets', 1)
+    return 'OK'
