@@ -10,6 +10,7 @@ from agent.llm import call_vllm
 from agent.tools import qdrant_search, neo4j_query, safe_docker_exec, gitlab_api_call
 from agent.memory import store_error_case, update_knowledge_graph
 from agent.schemas import ExecutionStep, DockerCommand, GitLabAction
+from agent.utils import generate_audit_id
 
 logger = logging.getLogger(__name__)
 
@@ -302,6 +303,3 @@ def parse_gitlab_action(command: str) -> GitLabAction:
         ref=params.get("job") or params.get("ref", "main")
     )
 
-def generate_audit_id() -> str:
-    import uuid, hashlib, time
-    return hashlib.sha256(f"{uuid.uuid4()}{time.time()}".encode()).hexdigest()[:16]

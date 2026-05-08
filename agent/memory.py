@@ -2,8 +2,9 @@
 import os, json, logging, asyncpg
 from datetime import datetime, timedelta
 from typing import Optional
-from qdrant_client import AsyncQdrantClient
-from neo4j import AsyncGraphDatabase
+from contextlib import asynccontextmanager
+
+from agent.utils import managed_qdrant_client, managed_neo4j_driver
 
 logger = logging.getLogger(__name__)
 
@@ -24,13 +25,12 @@ async def init_stores():
     )
     
     # Qdrant (через клиент)
-    _stores["qdrant"] = AsyncQdrantClient(url=os.getenv("QDRANT_URL"))
+    _stores["qdrant"] = None  # Будет создан через контекстный менеджер
     
     # Neo4j
-    _stores["neo4j"] = AsyncGraphDatabase.driver(
-        os.getenv("NEO4J_URI"),
-        auth=(os.getenv("NEO4J_USERNAME"), os.getenv("NEO4J_PASSWORD"))
-    )
+    _stores["neo4j_uri"] = os.getenv("NEO4J_URI")
+    _stores["neo4j_username"] = os.getenv("NEO4J_USERNAME", "neo4j")
+    _stores["neo4j_password"] = os.getenv("NEO4J_PASSWORD")
     
     logger.info("✓ Memory stores initialized")
 
@@ -103,29 +103,34 @@ async def get_audit_log(audit_id: str) -> Optional[dict]:
 
 async def update_knowledge_graph(error_sig: str, fix_steps: list[str], root_cause: Optional[str] = None):
     """Обновление графа знаний после успешного фикса"""
-    async with _stores["neo4j"].session() as session:
-        # Создаём/обновляем узел ошибки
-        await session.run("""
-            MERGE (e:Error {signature: $sig})
-            SET e.last_seen = datetime(), e.fix_count = COALESCE(e.fix_count, 0) + 1
-        """, sig=error_sig)
-        
-        # Добавляем шаги решения
-        for i, step in enumerate(fix_steps):
+    uri = _stores.get("neo4j_uri")
+    username = _stores.get("neo4j_username", "neo4j")
+    password = _stores.get("neo4j_password")
+    
+    async with managed_neo4j_driver(uri, username, password) as driver:
+        async with driver.session() as session:
+            # Создаём/обновляем узел ошибки
             await session.run("""
-                MATCH (e:Error {signature: $sig})
-                MERGE (s:Solution {step: $step, order: $order})
-                MERGE (e)-[:FIXED_BY]->(s)
-                SET s.validated = true, s.last_used = datetime()
-            """, sig=error_sig, step=step, order=i)
-        
-        # Если есть корневая причина — связываем
-        if root_cause:
-            await session.run("""
-                MATCH (e:Error {signature: $sig})
-                MERGE (c:RootCause {description: $cause})
-                MERGE (e)-[:CAUSED_BY]->(c)
-            """, sig=error_sig, cause=root_cause)
+                MERGE (e:Error {signature: $sig})
+                SET e.last_seen = datetime(), e.fix_count = COALESCE(e.fix_count, 0) + 1
+            """, sig=error_sig)
+            
+            # Добавляем шаги решения
+            for i, step in enumerate(fix_steps):
+                await session.run("""
+                    MATCH (e:Error {signature: $sig})
+                    MERGE (s:Solution {step: $step, order: $order})
+                    MERGE (e)-[:FIXED_BY]->(s)
+                    SET s.validated = true, s.last_used = datetime()
+                """, sig=error_sig, step=step, order=i)
+            
+            # Если есть корневая причина — связываем
+            if root_cause:
+                await session.run("""
+                    MATCH (e:Error {signature: $sig})
+                    MERGE (c:RootCause {description: $cause})
+                    MERGE (e)-[:CAUSED_BY]->(c)
+                """, sig=error_sig, cause=root_cause)
 
 # === Cleanup ===
 
@@ -133,8 +138,4 @@ async def close_stores():
     """Закрытие соединений"""
     if "postgres" in _stores:
         await _stores["postgres"].close()
-    if "qdrant" in _stores:
-        await _stores["qdrant"].close()
-    if "neo4j" in _stores:
-        await _stores["neo4j"].close()
     logger.info("✓ Memory stores closed")
