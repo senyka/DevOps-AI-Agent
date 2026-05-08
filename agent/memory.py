@@ -64,7 +64,6 @@ async def search_error_cases(query: str, project: Optional[str] = None, limit: i
     dsn = _stores.get("postgres_dsn")
     if not dsn:
         raise RuntimeError("PostgreSQL DSN not configured")
-
     async with managed_postgres_pool(dsn) as pool:
         async with pool.acquire() as conn:
             rows = await conn.fetch("""
@@ -87,7 +86,6 @@ async def store_audit_log(audit_id: str, input: dict, output: dict, metadata: di
     dsn = _stores.get("postgres_dsn")
     if not dsn:
         raise RuntimeError("PostgreSQL DSN not configured")
-
     async with managed_postgres_pool(dsn) as pool:
         async with pool.acquire() as conn:
             await conn.execute("""
@@ -109,7 +107,6 @@ async def get_audit_log(audit_id: str) -> Optional[dict]:
     dsn = _stores.get("postgres_dsn")
     if not dsn:
         raise RuntimeError("PostgreSQL DSN not configured")
-
     async with managed_postgres_pool(dsn) as pool:
         async with pool.acquire() as conn:
             row = await conn.fetchrow("""
@@ -124,7 +121,6 @@ async def update_knowledge_graph(error_sig: str, fix_steps: list[str], root_caus
     uri = _stores.get("neo4j_uri")
     username = _stores.get("neo4j_username", "neo4j")
     password = _stores.get("neo4j_password")
-
     async with managed_neo4j_driver(uri, username, password) as driver:
         async with driver.session() as session:
             # Создаём/обновляем узел ошибки
@@ -162,7 +158,6 @@ async def close_stores():
 def dedupe_memory(mem_list: List[Dict]) -> List[Dict]:
     """
     Дедупликация памяти по content/signature.
-
     Args:
         mem_list: Список записей памяти
 

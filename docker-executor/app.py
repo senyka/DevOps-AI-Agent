@@ -51,16 +51,13 @@ def validate_command(command_str: str) -> tuple[bool, str, list]:
     """
     Валидирует Docker команду по белому списку (Zero-Trust).
     Использует общую функцию из agent.shared.docker_commands.
-
     Returns:
         tuple: (is_valid, error_message, parts)
     """
     # Используем единую функцию валидации из общего модуля
     is_valid, error_msg, args = parse_docker_command(command_str)
-
     if not is_valid:
         return False, error_msg, []
-
     return True, "", ["docker"] + args
 
 

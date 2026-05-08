@@ -81,7 +81,6 @@ async def qdrant_search(
     # Загрузка модели (кэшируется)
     model = SentenceTransformer("BAAI/bge-m3", cache_folder="/models")
     dense_vec = model.encode(query, normalize_embeddings=True).tolist()
-
     async with managed_qdrant_client(QDRANT_URL) as client:
         # Hybrid search
         results = await client.search(
@@ -250,7 +249,6 @@ async def gitlab_api_call(action: GitLabAction) -> ExecutionResult:
 async def safe_shell_exec(command: str, timeout: int = 30) -> ExecutionResult:
     """✅ БЕЗОПАСНО: subprocess_exec + shlex + strict allowlist"""
     from agent.shared.docker_commands import AllowedShellCommand
-
     try:
         # Парсим команду с учётом кавычек и экранирования
         args = shlex.split(command)
@@ -278,7 +276,6 @@ async def safe_shell_exec(command: str, timeout: int = 30) -> ExecutionResult:
         # Формируем команду с timeout БЕЗ shell=True
         # timeout — отдельная команда, а не часть строки
         full_cmd = ["timeout", str(timeout)] + args
-
         proc = await asyncio.create_subprocess_exec(
             *full_cmd,  # ✅ list-аргументы, shell=False по умолчанию
             stdout=asyncio.subprocess.PIPE,
@@ -286,7 +283,6 @@ async def safe_shell_exec(command: str, timeout: int = 30) -> ExecutionResult:
             limit=4096
         )
         stdout, stderr = await proc.communicate()
-
         return ExecutionResult(
             output=stdout.decode(errors='replace') if stdout else "",
             error=stderr.decode(errors='replace') if stderr else "",

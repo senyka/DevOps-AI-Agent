@@ -1,12 +1,15 @@
 """
 Модуль безопасности - импортирует все компоненты.
 """
+from agent.shared.docker_commands import (
+    DockerCommand as AllowedCommand,
+    ALLOWED_DOCKER_COMMANDS as ALLOWED_FLAGS,
+    FORBIDDEN_FLAGS as FORBIDDEN_SUBSTRINGS,
+)
 from agent.security.docker_validator import (
-    AllowedCommand,
-    ALLOWED_FLAGS,
-    FORBIDDEN_SUBSTRINGS,
     validate_docker_command,
     sanitize_container_name,
+    check_approval_required,
 )
 
 from agent.security.approval import (
@@ -47,6 +50,7 @@ __all__ = [
     "FORBIDDEN_SUBSTRINGS",
     "validate_docker_command",
     "sanitize_container_name",
+    "check_approval_required",
     # Approval
     "DangerSignal",
     "DANGER_SIGNALS",
