@@ -1,11 +1,10 @@
 # agent/memory.py
 import os, json, logging, asyncpg
 from datetime import datetime, timedelta
-from typing import Optional, List, Dict
+from typing import Optional
 from contextlib import asynccontextmanager
-import hashlib
 
-from agent.utils import managed_qdrant_client, managed_neo4j_driver, managed_postgres_pool
+from agent.utils import managed_qdrant_client, managed_neo4j_driver
 
 logger = logging.getLogger(__name__)
 
@@ -21,8 +20,8 @@ async def init_stores():
     _stores["postgres_dsn"] = os.environ["DATABASE_URL"]
     
     # Qdrant (через клиент)
-    _stores["qdrant_url"] = os.getenv("QDRANT_URL", "http://qdrant:6333")
-    
+    _stores["qdrant"] = None  # Будет создан через контекстный менеджер
+
     # Neo4j
     _stores["neo4j_uri"] = os.getenv("NEO4J_URI")
     _stores["neo4j_username"] = os.getenv("NEO4J_USERNAME", "neo4j")
@@ -153,70 +152,8 @@ async def update_knowledge_graph(error_sig: str, fix_steps: list[str], root_caus
 # === Cleanup ===
 
 async def close_stores():
-    """Закрытие соединений (теперь не требуется, т.к. используем контекстные менеджеры)"""
-    logger.info("✓ Memory stores cleanup not required - using context managers")
 
-
-# === Memory Helpers ===
-
-def dedupe_memory(mem_list: List[Dict]) -> List[Dict]:
-    """
-    Дедупликация памяти по content/signature.
-    
-    Args:
-        mem_list: Список записей памяти
-        
-    Returns:
-        Список без дубликатов
-    """
-    seen = set()
-    out = []
-    for item in mem_list:
-        # Ключ для дедупликации: signature или content
-        key = item.get("signature") or item.get("content") or str(item)
-        if key not in seen:
-            out.append(item)
-            seen.add(key)
-    return out
-
-
-def summarize_memory(memory_items: List[Dict], max_lines: int = 10) -> List[Dict]:
-    """
-    Резюмирование последних записей памяти.
-    
-    Args:
-        memory_items: Список записей памяти
-        max_lines: Максимальное количество строк в резюме
-        
-    Returns:
-        Список с одной записью-резюме
-    """
-    if not memory_items:
-        return []
-    
-    # Берём последние N записей
-    recent = memory_items[-max_lines:]
-    text = "\n".join(item.get("content", str(item)) for item in recent)
-    
-    # Простое резюмирование (в production можно использовать LLM)
-    summary_text = f"Summary of {len(recent)} recent items:\n{text[:500]}..."
-    
-    return [{"type": "summary", "content": summary_text, "timestamp": datetime.utcnow().isoformat()}]
-
-
-def extract_session_id(key: str, session_id: Optional[str] = None) -> str:
-    """
-    Извлечение session-id для ключей памяти.
-    
-    Args:
-        key: Базовый ключ
-        session_id: Опциональный session-id
-        
-    Returns:
-        Ключ с session-id
-    """
-    if session_id:
-        return f"{session_id}:{key}"
-    
-    # Генерируем hash из ключа как fallback
-    return hashlib.sha256(key.encode()).hexdigest()[:16]
+    """Закрытие соединений"""
+    if "postgres" in _stores:
+        await _stores["postgres"].close()
+    logger.info("✓ Memory stores closed")
