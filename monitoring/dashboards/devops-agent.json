@@ -1,7 +1,3 @@
-### `monitoring/dashboards/devops-agent.json`
-**Назначение:** Готовый дашборд Grafana (импортируется через UI).
-
-```json
 {
   "dashboard": {
     "title": "DevOps AI Agent",
@@ -31,6 +27,3 @@
     "refresh": "30s"
   }
 }
-```
-
----
