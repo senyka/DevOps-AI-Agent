@@ -207,7 +207,6 @@ graph TB
 
 ## 🔄 Последовательность обработки запроса
 
-### Детальная последовательность выполнения запроса
 
 ```mermaid
 sequenceDiagram
@@ -329,81 +328,118 @@ sequenceDiagram
 
 ```
 DevOps-AI-Agent/
-├── 📄 .env.example                      # Шаблон переменных окружения (скопировать в .env)
-├── 📄 .gitignore                        # Правила исключения файлов из Git
-├── 📄 FILES.md                          # 🔍 Детальная документация по каждому файлу (91 KB)
-├── 📄 LICENSE                           # Лицензия MIT
-├── 📄 README.md                         # Основная документация проекта
-├── 📄 docker-compose.yml                # Оркестрация: agent, neo4j, qdrant, executor, monitoring
+├── 📄 .env.example                    # Шаблон переменных окружения
+├── 📄 .gitignore                      # Правила исключения файлов из Git
+├── 📄 ARCHITECTURE.md                 # 🆕 Детальное описание архитектуры (8.3 KB)
+├── 📄 LICENSE                         # Лицензия MIT
+├── 📄 MIGRATION_REPORT.md             # 🆕 Отчёт о миграции и исправлениях (9.5 KB)
+├── 📄 README.md                       # Основная документация
+├── 📄 docker-compose.yml              # Оркестрация: agent, vllm, neo4j, qdrant, executor, monitoring
 │
-├── 📁 agent/                            # 🤖 Ядро AI-агента (LangGraph + LLM)
-│   ├── 📄 Dockerfile                    # Образ для контейнера агента
-│   ├── 📄 requirements.txt              # Python-зависимости агента
-│   ├── 📄 main.py                       # Точка входа: инициализация графа и CLI
-│   ├── 📄 graph.py                      # Определение графа LangGraph (узлы, рёбра, состояние)
-│   ├── 📄 llm.py                        # Конфигурация LLM-провайдеров (OpenAI/vLLM)
-│   ├── 📄 memory.py                     # Работа с памятью: Neo4j + Qdrant + краткосрочная
-│   ├── 📄 schemas.py                    # Pydantic-схемы: State, Input, Output, ToolResponse
-│   ├── 📄 tools.py                      # Инструменты агента: shell, git, docker, k8s, web
-│   ├── 📄 config.py                     # Централизованная конфигурация через pydantic-settings
-│   ├── 📄 utils.py                      # Утилиты: контекстные менеджеры, дедупликация памяти
+├── 📁 agent/                          # 🤖 Ядро AI-агента (LangGraph + LLM)
+│   ├── 📄 Dockerfile
+│   ├── 📄 requirements.txt            # 🆕 Python-зависимости агента
+│   ├── 📄 main.py                     # Точка входа: инициализация графа и CLI
+│   ├── 📄 graph.py                    # LangGraph state machine
+│   ├── 📄 llm.py                      # Конфигурация LLM-провайдеров (OpenAI/vLLM)
+│   ├── 📄 memory.py                   # Работа с памятью: Neo4j + Qdrant + краткосрочная
+│   ├── 📄 schemas.py                  # Pydantic-схемы: State, Input, Output
+│   ├── 📄 tools.py                    # Инструменты: shell, git, docker, k8s, web
+│   ├── 📄 config.py                   # 🆕 Конфигурация агента
+│   ├── 📄 utils.py                    # 🆕 Вспомогательные утилиты
 │   │
-│   ├── 📁 cli/                          # 💬 CLI-интерфейс для взаимодействия
+│   ├── 📁 cli/                        # 💬 CLI-интерфейс
 │   │   ├── 📄 __init__.py
-│   │   ├── 📄 ask.py                    # Команда `ask`: вопрос к агенту
-│   │   ├── 📄 fix.py                    # Команда `fix`: анализ и исправление ошибок
-│   │   └── 📄 memory.py                 # Команда `memory`: управление контекстом
+│   │   ├── 📄 ask.py                  # Команда `ask`: вопрос к агенту
+│   │   ├── 📄 fix.py                  # Команда `fix`: анализ и исправление
+│   │   ├── 📄 memory.py               # Команда `memory`: управление контекстом
+│   │   └── 📁 __pycache__/            # 🗑️ Кэш компиляции (игнорировать)
 │   │
-│   ├── 📁 security/                     # 🔐 Модуль безопасности (Human-in-the-Loop)
+│   ├── 📁 security/                   # 🔐 🆕 Модуль безопасности (Human-in-the-Loop)
 │   │   ├── 📄 __init__.py
-│   │   ├── 📄 approval.py               # Запрос подтверждения на опасные действия
-│   │   ├── 📄 cypher_sanitizer.py       # Валидация и санитизация Cypher-запросов
-│   │   ├── 📄 docker_validator.py       # Allowlist Docker-команд и проверка образов
-│   │   ├── 📄 logging.py                # Аудит-логирование с маскировкой секретов
-│   │   └── 📄 secrets.py                # Работа с Docker Secrets и переменными окружения
+│   │   ├── 📄 approval.py             # Запрос подтверждения на опасные действия
+│   │   ├── 📄 cypher_sanitizer.py     # Валидация Cypher-запросов
+│   │   ├── 📄 docker_validator.py     # Allowlist Docker-команд
+│   │   ├── 📄 logging.py              # Аудит-логирование с маскировкой
+│   │   └── 📄 secrets.py              # Работа с Docker Secrets
 │   │
-│   └── 📁 shared/                       # 📦 Общие модули (без циклических зависимостей)
-│       ├── 📄 __init__.py
-│       └── 📄 docker_commands.py        # Единый allowlist Docker-команд для всех модулей
+│   └── 📁 shared/                     # 🆕 Общие утилиты и константы
+│       └── 📄 __init__.py
 │
-├── 📁 config/                           # ⚙️ Конфигурация сервисов
-│   ├── 📄 neo4j.conf                    # Настройки Neo4j: лимиты, логирование, plugins
-│   ├── 📄 qdrant.yaml                   # Конфигурация Qdrant: коллекции, векторизация
-│   └── 📁 guardrails/                   # 🛡️ NeMo Guardrails от инъекций
-│       ├── 📄 config.json               # Правила и потоки диалога
-│       └── 📄 rails.co                  # Коллайдер-правила для фильтрации промптов
+├── 📁 config/                         # ⚙️ Конфигурация сервисов
+│   ├── 📄 neo4j.conf                  # Настройки Neo4j
+│   ├── 📄 qdrant.yaml                 # Конфигурация Qdrant
+│   │
+│   └── 📁 guardrails/                 # 🛡️ NeMo Guardrails от инъекций
+│       ├── 📄 config.json             # Правила диалога
+│       └── 📄 rails.co                # Коллайдер-правила для фильтрации промптов
 │
-├── 📁 data/                             # 💾 Данные (игнорируются в Git, монтируются в runtime)
+├── 📁 data/                           # 💾 Данные (игнорируются в Git)
 │   ├── 📄 .gitkeep
-│   └── 📁 holdout/
-│       └── 📄 devops_holdout_example.jsonl  # Пример тестовых данных для валидации
-│   # 📁 models/     — для fine-tuned моделей (создаётся при запуске)
-│   # 📁 datasets/   — для обучающих датасетов (создаётся при запуске)
+│   └── 📁 holdout/                    # Тестовый набор для валидации
+│       └── 📄 devops_holdout_example.jsonl
+│   # 📁 models/ — создаётся при запуске (кэш HuggingFace)
+│   # 📁 datasets/ — создаётся при запуске (датасеты для LoRA)
 │
-├── 📁 docker-executor/                  # 🐳 Изолированный сервис выполнения Docker-команд
-│   ├── 📄 Dockerfile                    # Минималистичный образ с Docker CLI
-│   ├── 📄 app.py                        # HTTP API: валидация → выполнение → возврат результата
-│   └── 📄 requirements.txt              # Зависимости: fastapi, uvicorn, docker
-│   # 🔒 Архитектура: агент → HTTP → executor → Docker (без монтирования docker.sock!)
+├── 📁 docker-executor/                # 🐳 🆕 Изолированный сервис выполнения Docker-команд
+│   ├── 📄 Dockerfile
+│   ├── 📄 app.py                      # HTTP API: валидация → выполнение → результат
+│   └── 📄 requirements.txt            # Зависимости: fastapi, uvicorn, docker
 │
-├── 📁 init/                             # 🗄️ Инициализация баз данных
-│   ├── 📄 01_schema.sql                 # Создание таблиц: incidents, actions, audit_trail
-│   └── 📄 02_indexes.sql                # Оптимизация: GIN, B-tree, полнотекстовый поиск
+├── 📁 img/                            # 🖼️ 🆕 Изображения для документации
+│   └── 📄 .gitkeep
 │
-├── 📁 logs/                             # 📋 Логи (автогенерируемые)
+├── 📁 init/                           # 🗄️ Инициализация баз данных
+│   ├── 📄 01_schema.sql               # Таблицы: incidents, actions, audit_trail
+│   └── 📄 02_indexes.sql              # Оптимизация: GIN, B-tree, полнотекстовый поиск
+│
+├── 📁 kubernetes/                     # ☸️ 🆕 Манифесты для развёртывания в K8s
+│   ├── 📄 README.md                   # Документация по K8s-развёртыванию
+│   ├── 📁 cert-manager/               # Настройка TLS-сертификатов
+│   ├── 📁 configmaps/                 # ConfigMaps для сервисов
+│   ├── 📁 deployments/                # Deployment-манифесты
+│   ├── 📁 namespaces/                 # Namespace-конфигурации
+│   ├── 📁 networkpolicies/            # Сетевые политики
+│   ├── 📁 redis/                      # Redis для Celery
+│   ├── 📁 secrets/                    # Управление секретами
+│   ├── 📁 services/                   # Service-манифесты
+│   ├── 📁 storage/                    # PersistentVolumeClaims
+│   └── 📁 vault/                      # Интеграция с HashiCorp Vault
+│
+├── 📁 logs/                           # 📋 Логи (автогенерируемые)
 │   ├── 📄 .gitkeep
-│   └── 📄 audit.jsonl.example           # Пример формата аудита: timestamp, action, user, result
-│   # 📄 agent.log, vllm.log — создаются при запуске
+│   └── 📄 audit.jsonl.example         # Пример формата аудита
+│   # 📄 agent.log, 📄 vllm.log — создаются при запуске
 │
-├── 📁 lora_adapters/                    # 🎯 LoRA-адаптеры для доменной настройки LLM
+├── 📁 lora_adapters/                  # 🎯 LoRA-адаптеры для доменной настройки LLM
 │   ├── 📄 .gitkeep
 │   └── 📁 devops_v1/
-│       └── 📄 adapter_config.json       # Конфигурация адаптера: target_modules, r, alpha
-│   # 📄 adapter_model.safetensors — загружается отдельно при обучении
+│       └── 📄 adapter_config.json     # Конфигурация адаптера
+│   # 📄 adapter_model.safetensors — загружается отдельно
 │
-└── 📁 monitoring/                       # 📊 Наблюдаемость
-    └── 📁 dashboards/                   # Grafana-дашборды (в разработке)
-        # 📄 devops-agent.json — метрики: latency, tool_usage, approval_rate, errors
+├── 📁 monitoring/                     # 📊 Наблюдаемость
+│   ├── 📄 prometheus.yml              # Конфигурация Prometheus
+│   └── 📁 dashboards/
+│       └── 📄 devops-agent.json       # Grafana-дашборд: latency, tool_usage, errors
+│
+├── 📁 scripts/                        # 🛠️ Утилиты развёртывания и обслуживания
+│   ├── 📄 backup.sh                   # Snapshot PG + Qdrant + Neo4j
+│   ├── 📄 import_gitlab_errors.py     # Импорт истории падений из GitLab CI
+│   └── 📄 lora_manager.sh             # load/unload/rollback LoRA в vLLM
+│
+├── 📁 tests/                          # 🧪 🆕 Тесты
+│   ├── 📄 conftest.py                 # Фикстуры pytest
+│   └── 📁 unit/                       # Юнит-тесты
+│       └── 📄 __init__.py
+│
+└── 📁 worker/                         # ⚙️ Фоновые задачи (Celery)
+    ├── 📄 Dockerfile
+    ├── 📄 requirements.txt            # 🆕 Зависимости воркера
+    ├── 📄 tasks.py                    # consolidate_memory, train_lora_adapter
+    ├── 📄 monitor.py                  # Валидация адаптеров, auto-rollback
+    ├── 📁 configs/
+    │   └── 📄 devops_lora.yaml        # Axolotl/Unsloth конфиг обучения
+    └── 📁 __pycache__/                # 🗑️ Кэш компиляции (игнорировать)
 ```
 
 ---
