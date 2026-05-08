@@ -1,14 +1,22 @@
-# 🤖 DevOps AI Agent — Персональный исследовательский ассистент
+# 🤖 DevOps AI Agent — Автономный DevOps-ассистент с Zero-Trust Execution
 
-
-> **Статус**: 🟡 Активная разработка | **Обновлено**: Май 2026  
-> Документ описывает высокоуровневую архитектуру, границы компонентов, потоки данных и принципы безопасности системы.
+> **Статус**: ✅ Production-ready | **Обновлено**: Май 2026
+> **Версия**: 0.2.0 | **Лицензия**: MIT
+> Документ описывает архитектуру, компоненты, потоки данных и принципы безопасности системы.
 
 ---
 
 ## 📖 Введение
 
-DevOps-AI-Agent — это автономный ассистент для диагностики, исправления и предотвращения инцидентов в DevOps-инфраструктуре. Система построена на базе **LangGraph** (управляемый граф состояний), использует **гибридную память** (граф + вектор) и следует принципу **Zero-Trust Execution**: ни один деструктивный запрос не выполняется без валидации и явного подтверждения.
+**DevOps-AI-Agent** — это автономный ассистент для диагностики, исправления и предотвращения инцидентов в DevOps-инфраструктуре. Система построена на базе **LangGraph** (управляемый граф состояний), использует **гибридную память** (граф + вектор) и следует принципу **Zero-Trust Execution**: ни одно действие не выполняется без многоуровневой валидации.
+
+### ✨ Ключевые возможности
+
+- 🔍 **Диагностика инцидентов**: Анализ логов, метрик и событий в реальном времени
+- 🛠️ **Авто-исправление**: Безопасное выполнение remediation-скриптов с human-in-the-loop
+- 🧠 **Непрерывное обучение**: LoRA fine-tuning на успешных кейсах через RAG
+- 🔐 **Zero-Trust Security**: Allowlist команд, валидация входных данных, аудит всех действий
+- 📊 **Гибридная память**: Neo4j (связи инцидентов) + Qdrant (семантический поиск)
 
 ---
 ## 📋 Оглавление
@@ -32,7 +40,7 @@ DevOps-AI-Agent — это автономный ассистент для диа
 
 ![shema](/img/shema.png)
 
-# 🏗️ Схема архитектуры 
+# 🏗️ Схема архитектуры
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#1a1a2e', 'primaryTextColor': '#fff', 'primaryBorderColor': '#4a4a6a', 'lineColor': '#6a6a9a', 'secondaryColor': '#16213e', 'tertiaryColor': '#0f3460' }}}%%
@@ -47,26 +55,26 @@ graph TB
     %% ==================== ЯДРО АГЕНТА ====================
     subgraph AgentCore ["🤖 Ядро AI-агента (agent/)"]
         direction TB
-        
+
         Main["📄 main.py<br/>Точка входа"]
         Graph["📄 graph.py<br/>LangGraph State Machine"]
         LLM["📄 llm.py<br/>LLM Provider<br/>(OpenAI / vLLM)"]
         Memory["📄 memory.py<br/>Hybrid Memory"]
         Tools["📄 tools.py<br/>DevOps Tools"]
         Schemas["📄 schemas.py<br/>Pydantic Models"]
-        
+
         Main --> Graph
         Graph --> LLM
         Graph --> Memory
         Graph --> Tools
         Graph --> Schemas
-        
+
         subgraph CLI_Module ["📁 cli/"]
             Ask["ask.py"]
             Fix["fix.py"]
             MemCtrl["memory.py"]
         end
-        
+
         subgraph Security ["🔐 security/"]
             Approval["approval.py<br/>Human-in-the-Loop"]
             DockerVal["docker_validator.py<br/>Command Allowlist"]
@@ -81,7 +89,7 @@ graph TB
         ExecAPI["📄 app.py<br/>FastAPI HTTP Endpoint"]
         ExecDocker["🐳 Docker CLI<br/>subprocess execution"]
         ExecVal["✅ Input Validation<br/>Allowlist Check"]
-        
+
         ExecAPI --> ExecVal
         ExecVal --> ExecDocker
     end
@@ -91,7 +99,7 @@ graph TB
         Neo4j[("🕸️ Neo4j<br/>Graph Memory<br/>- Incidents<br/>- Actions<br/>- Audit Trail")]
         Qdrant[("🎯 Qdrant<br/>Vector Store<br/>- Embeddings<br/>- Semantic Search")]
         Postgres[("🗄️ PostgreSQL<br/>Relational State<br/>- Users<br/>- Configs")]
-        
+
         LoRA["📁 lora_adapters/<br/>devops_v1/<br/>Domain Fine-tuning"]
     end
 
@@ -115,38 +123,38 @@ graph TB
     %% Пользователь → Агент
     CLI --> Main
     WebUI --> Main
-    
+
     %% Агент → Безопасность
     Tools --> Approval
     Approval -->|✅ Approved| Executor
     Approval -->|❌ Rejected| AuditLog
-    
+
     %% Агент → Хранилища
     Memory <--> Neo4j
     Memory <--> Qdrant
     Memory <--> Postgres
-    
+
     %% Агент → Внешние системы (через инструменты)
     Tools --> GitLab
     Tools --> K8s
     Tools --> DockerReg
     Tools --> WebAPI
-    
+
     %% Безопасность → Исполнитель
     DockerVal --> ExecAPI
     CypherSan --> Neo4j
     Secrets -.-> ExecAPI
-    
+
     %% Исполнитель → Внешние
     ExecDocker --> K8s
     ExecDocker --> DockerReg
-    
+
     %% Мониторинг
     AuditLog --> Logs
     Logs --> Grafana
     Guardrails --> LLM
     Guardrails --> Tools
-    
+
     %% LoRA
     LLM -.->|Load Adapter| LoRA
 
@@ -157,7 +165,7 @@ graph TB
     classDef dataLayer fill:#192a56,stroke:#3c6382,color:#fff
     classDef external fill:#3d3d3d,stroke:#707070,color:#fff,dashed
     classDef observability fill:#2c2c54,stroke:#474787,color:#fff
-    
+
     class CLI,WebUI userLayer
     class Main,Graph,LLM,Memory,Tools,Schemas,CLI_Module,Security agentCore
     class ExecAPI,ExecDocker,ExecVal executor
@@ -172,12 +180,13 @@ graph TB
 
 | Решение | Обоснование | Реализация |
 |---------|-------------|------------|
-| **🔐 Изолированный docker-executor** | Безопасность: агент не имеет прямого доступа к `docker.sock` | HTTP API + allowlist команд + валидация входных данных |
-| **🧠 Гибридная память** | Разные типы знаний требуют разных хранилищ | Neo4j (связи инцидентов), Qdrant (семантический поиск), Dict (кэш сессии) |
-| **👮 Human-in-the-Loop** | Критические действия требуют подтверждения | `approval.py` блокирует `rm`, `delete`, `destroy` без явного `--force` |
-| **🛡️ Guardrails на входе** | Защита от prompt injection и jailbreak | NeMo Guardrails фильтрует промпты до передачи в LLM |
-| **🧵 Асинхронная архитектура** | Параллельное выполнение инструментов | `asyncio.gather()` в `tools.py` для одновременных API-запросов |
-| **📦 Модульность через LangGraph** | Гибкое управление состоянием и ветвлением | Узлы графа = этапы рассуждения, рёбра = условия перехода |
+| **🔐 Zero-Trust Execution** | Безопасность: ни одно действие не выполняется без валидации | `agent/shared/docker_commands.py` + `agent/security/docker_validator.py` + `agent/tools.py` |
+| **🧠 Гибридная память** | Разные типы знаний требуют разных хранилищ | Neo4j (граф связей), Qdrant (векторный поиск), MemoryBuffer (кэш сессии) |
+| **👮 Human-in-the-Loop** | Критические действия требуют подтверждения | `approval.py` + `requires_human_approval()` для `exec`, `delete`, `remove` |
+| **🛡️ Multi-layer Guardrails** | Защита от injection и галлюцинаций LLM | Allowlist команд, Pydantic валидация, Cypher санитизация, NeMo Guardrails |
+| **🧵 Асинхронная архитектура** | Параллельное выполнение инструментов | `asyncio.create_subprocess_exec()` + `asyncio.gather()` |
+| **📦 Tool Registry** | Предотвращение вызова несуществующих инструментов | `ToolRegistry` класс с проверкой существования перед вызовом |
+| **♻️ Resource Management** | Корректное закрытие подключений к БД | Контекстные менеджеры для Qdrant, Neo4j, PostgreSQL |
 
 ---
 
@@ -192,7 +201,7 @@ sequenceDiagram
     participant E as 🐳 Executor
     participant D as 💾 Data Layer
     participant X as 🌍 External
-    
+
     U->>C: ask "почему упал pod frontend?"
     C->>A: main.py: initialize State
     A->>A: graph.py: parse_intent()
@@ -249,6 +258,8 @@ DevOps-AI-Agent/
 │   ├── 📄 memory.py                     # Работа с памятью: Neo4j + Qdrant + краткосрочная
 │   ├── 📄 schemas.py                    # Pydantic-схемы: State, Input, Output, ToolResponse
 │   ├── 📄 tools.py                      # Инструменты агента: shell, git, docker, k8s, web
+│   ├── 📄 config.py                     # Централизованная конфигурация через pydantic-settings
+│   ├── 📄 utils.py                      # Утилиты: контекстные менеджеры, дедупликация памяти
 │   │
 │   ├── 📁 cli/                          # 💬 CLI-интерфейс для взаимодействия
 │   │   ├── 📄 __init__.py
@@ -256,13 +267,17 @@ DevOps-AI-Agent/
 │   │   ├── 📄 fix.py                    # Команда `fix`: анализ и исправление ошибок
 │   │   └── 📄 memory.py                 # Команда `memory`: управление контекстом
 │   │
-│   └── 📁 security/                     # 🔐 Модуль безопасности (Human-in-the-Loop)
+│   ├── 📁 security/                     # 🔐 Модуль безопасности (Human-in-the-Loop)
+│   │   ├── 📄 __init__.py
+│   │   ├── 📄 approval.py               # Запрос подтверждения на опасные действия
+│   │   ├── 📄 cypher_sanitizer.py       # Валидация и санитизация Cypher-запросов
+│   │   ├── 📄 docker_validator.py       # Allowlist Docker-команд и проверка образов
+│   │   ├── 📄 logging.py                # Аудит-логирование с маскировкой секретов
+│   │   └── 📄 secrets.py                # Работа с Docker Secrets и переменными окружения
+│   │
+│   └── 📁 shared/                       # 📦 Общие модули (без циклических зависимостей)
 │       ├── 📄 __init__.py
-│       ├── 📄 approval.py               # Запрос подтверждения на опасные действия
-│       ├── 📄 cypher_sanitizer.py       # Валидация и санитизация Cypher-запросов
-│       ├── 📄 docker_validator.py       # Allowlist Docker-команд и проверка образов
-│       ├── 📄 logging.py                # Аудит-логирование с маскировкой секретов
-│       └── 📄 secrets.py                # Работа с Docker Secrets и переменными окружения
+│       └── 📄 docker_commands.py        # Единый allowlist Docker-команд для всех модулей
 │
 ├── 📁 config/                           # ⚙️ Конфигурация сервисов
 │   ├── 📄 neo4j.conf                    # Настройки Neo4j: лимиты, логирование, plugins
@@ -515,7 +530,7 @@ curl -X POST http://localhost:8080/api/v1/query \
 
 ---
 
-## 🧠 Логика работы 
+## 🧠 Логика работы
 
 ### Цикл обработки запроса
 ```
@@ -844,6 +859,7 @@ devops-agent ask --mode advisory --task "..."  # Только рекоменда
 
 | Версия | Дата | Изменения |
 |--------|------|-----------|
+| **0.2.1** | 2026-05-08 | 🛡️ **Zero-Trust Security Update**: <br>• Устранено дублирование `generate_audit_id()` → централизация в `agent/utils.py` <br>• Исправлена обработка asyncio в Celery tasks → `get_event_loop().run_until_complete()` <br>• Унифицирован allowlist Docker-команд → `agent/shared/docker_commands.py` (Enum `DockerCommand`) <br>• Добавлен proper resource management → контекстные менеджеры для Qdrant, Neo4j, PostgreSQL <br>• Внедрён `ToolRegistry` для предотвращения галлюцинаций LLM <br>• Добавлены unit-тесты безопасности (25 тестов в `test_docker_validator.py`) <br>• Zero-trust execution: `create_subprocess_exec()` вместо `shell=True` |
 | 0.2.0 | 2026-05-07 | 🔐 **Security & Fixes**: исправлены коллизии в Docker Executor (маршрутизация через микросервис), добавлена валидация Cypher-запросов, унифицированы переменные окружения (`LLM_API_BASE`), обновлён README с описанием исправлений |
 | 0.1.2 | 2026-05-06 | 📝 **Documentation Update**: актуализация README, исправление .env.example (удалена Markdown-разметка), полная проверка безопасности |
 | 0.1.1 | 2026-05-05 | 🔐 **Security Patch**: устранены Critical и High уязвимости (Command Injection, Path Traversal, Pickle deserialization, SQL injection) |
