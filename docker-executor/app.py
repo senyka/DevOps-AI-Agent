@@ -1,17 +1,44 @@
 """
 Docker Executor Service - безопасный микросервис для выполнения Docker команд.
 Принимает только разрешённые команды через HTTP API.
+Zero-Trust Execution: все команды валидируются по белому списку.
 """
 from flask import Flask, request, jsonify
 import subprocess
 import shlex
 import os
 import re
+from enum import Enum
+from typing import List, Set
 
 app = Flask(__name__)
 
-# Получаем список разрешённых команд из переменной окружения
-ALLOWED_COMMANDS = os.getenv("ALLOWED_COMMANDS", "ps,logs,inspect,version,info").split(",")
+# === Zero-Trust Allowlist ===
+
+class AllowedCommand(str, Enum):
+    """Разрешённые Docker команды (синхронизировано с agent/security/docker_validator.py)"""
+    PS = "ps"
+    LOGS = "logs"
+    INSPECT = "inspect"
+    VERSION = "version"
+    INFO = "info"
+    STATS = "stats"
+
+# Разрешённые флаги для каждой команды
+ALLOWED_FLAGS: dict[AllowedCommand, Set[str]] = {
+    AllowedCommand.PS: {"-a", "--all", "--format", "--filter", "--no-trunc", "-q", "--quiet", "-s", "--size"},
+    AllowedCommand.LOGS: {"--tail", "--since", "--until", "--timestamps", "-f", "--follow", "-n", "--details"},
+    AllowedCommand.INSPECT: {"--format", "--size", "-s"},
+    AllowedCommand.VERSION: set(),
+    AllowedCommand.INFO: {"--format"},
+    AllowedCommand.STATS: {"--format", "--no-stream", "-a", "--all"},
+}
+
+# Запрещённые подстроки в аргументах
+FORBIDDEN_SUBSTRINGS: List[str] = [
+    "rm", "kill", "stop", "exec", "run", "build", "push", "pull", "rmi",
+    "--force", "-f", "delete", "remove", "prune", "system"
+]
 
 # Максимальная длина вывода (защита от DoS)
 MAX_OUTPUT_LENGTH = int(os.getenv("MAX_OUTPUT_LENGTH", "100000"))
@@ -22,55 +49,19 @@ DEFAULT_TIMEOUT = int(os.getenv("COMMAND_TIMEOUT", "30"))
 
 def validate_command(command_str: str) -> tuple[bool, str, list]:
     """
-    Валидирует и разбирает команду.
-
+    Валидирует Docker команду по белому списку (Zero-Trust).
+    Использует общую функцию из agent.shared.docker_commands.
+    
     Returns:
         tuple: (is_valid, error_message, parts)
     """
-    if not command_str or not isinstance(command_str, str):
-        return False, "Пустая команда", []
-
-    command_str = command_str.strip()
-
-    # Разбираем команду с учётом кавычек
-    try:
-        parts = shlex.split(command_str)
-    except ValueError as e:
-        return False, f"Ошибка разбора команды: {e}", []
-
-    if not parts:
-        return False, "Пустая команда", []
-
-    # Проверка что начинается с docker
-    if parts[0] != "docker":
-        return False, f"Команда должна начинаться с 'docker', получено: {parts[0]}", []
-
-    if len(parts) < 2:
-        return False, "Не указана подкоманда", []
-
-    sub_cmd = parts[1]
-
-    # Проверка подкоманды в allowlist
-    if sub_cmd not in ALLOWED_COMMANDS:
-        return False, f"Команда '{sub_cmd}' не входит в разрешённый список: {ALLOWED_COMMANDS}", []
-
-    # Дополнительная проверка на запрещённые паттерны в аргументах
-    forbidden_patterns = [
-        r'\brm\b', r'\bkill\b', r'\bstop\b', r'\bexec\b',
-        r'\brun\b', r'\bbuild\b', r'\bpush\b', r'\bpull\b',
-        r'--force\b', r'\b-f\b', r'\bdelete\b', r'\bremove\b',
-    ]
-
-    for part in parts[2:]:
-        for pattern in forbidden_patterns:
-            if re.search(pattern, part, re.IGNORECASE):
-                return False, f"Обнаружена запрещённая подстрока в аргументе: {part}", []
-
-        # Проверка на shell-метасимволы
-        if re.search(r'[;&|`$(){}]', part):
-            return False, f"Аргумент содержит недопустимые символы: {part}", []
-
-    return True, "", parts
+    # Используем единую функцию валидации из общего модуля
+    is_valid, error_msg, args = parse_docker_command(command_str)
+    
+    if not is_valid:
+        return False, error_msg, []
+    
+    return True, "", ["docker"] + args
 
 
 @app.route("/health", methods=["GET"])
@@ -78,7 +69,7 @@ def health_check():
     """Health check endpoint."""
     return jsonify({
         "status": "healthy",
-        "allowed_commands": ALLOWED_COMMANDS,
+        "allowed_commands": list(ALLOWED_DOCKER_COMMANDS),
         "max_output_length": MAX_OUTPUT_LENGTH,
         "timeout": DEFAULT_TIMEOUT,
     })
@@ -153,7 +144,7 @@ def exec_docker():
 def get_allowed_commands():
     """Возвращает список разрешённых команд."""
     return jsonify({
-        "allowed_commands": ALLOWED_COMMANDS,
+        "allowed_commands": list(ALLOWED_DOCKER_COMMANDS),
     })
 
 
@@ -165,6 +156,6 @@ if __name__ == "__main__":
     host = os.getenv("HOST", "0.0.0.0")
 
     print(f"Starting Docker Executor on {host}:{port}")
-    print(f"Allowed commands: {ALLOWED_COMMANDS}")
+    print(f"Allowed commands: {list(ALLOWED_DOCKER_COMMANDS)}")
 
     app.run(host=host, port=port, debug=debug)

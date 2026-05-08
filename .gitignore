@@ -1,17 +1,36 @@
 ```
-# Kubernetes related ignores
-.kube/
-.kubectl/
-helm/
-charts/
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+.ENV
+.venv.bak
+.env.bak
 
-# Configuration and deployment artifacts
-*.kubeconfig
-kubectl/
-kubectx/
+# Logs
+*.log
 
-# Deployment scripts and config
-*.sh
-*.yaml
-*.yml
+# IDE
+.vscode/
+.idea/
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Coverage
+.coverage
+htmlcov/
+coverage/
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
 ```

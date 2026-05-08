@@ -14,6 +14,7 @@ class AllowedCommand(str, Enum):
     INSPECT = "inspect"
     VERSION = "version"
     INFO = "info"
+    STATS = "stats"
 
 
 # Разрешённые флаги для каждой команды
@@ -23,6 +24,7 @@ ALLOWED_FLAGS: dict[AllowedCommand, Set[str]] = {
     AllowedCommand.INSPECT: {"--format", "--size", "-s"},
     AllowedCommand.VERSION: set(),
     AllowedCommand.INFO: {"--format"},
+    AllowedCommand.STATS: {"--format", "--no-stream", "-a", "--all"},
 }
 
 # Запрещённые подстроки в аргументах

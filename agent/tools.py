@@ -1,12 +1,15 @@
 # agent/tools.py
 import os, re, json, asyncio, logging
-from typing import Optional, Union
+from typing import Optional, Union, Callable, Dict
 from pydantic import BaseModel, Field, validator
 import httpx, asyncpg
 from datetime import datetime
+import shlex
 
 from agent.schemas import DockerCommand, GitLabAction, ExecutionResult
 from agent.security.docker_validator import validate_docker_command, sanitize_container_name
+from agent.utils import managed_qdrant_client
+from agent.shared.docker_commands import parse_docker_command as parse_docker_cmd_shared
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +20,51 @@ NEO4J_URI = os.getenv("NEO4J_URI", "bolt://neo4j:7687")
 NEO4J_USER = os.getenv("NEO4J_USERNAME", "neo4j")
 NEO4J_PASS = os.getenv("NEO4J_PASSWORD")
 DOCKER_EXECUTOR_URL = os.getenv("DOCKER_EXECUTOR_URL", "http://docker-executor:5001")
+
+# === Tool Registry ===
+
+class ToolRegistry:
+    """Реестр инструментов для предотвращения галлюцинаций LLM"""
+    
+    def __init__(self):
+        self.tools: Dict[str, Callable] = {}
+        self._register_default_tools()
+    
+    def _register_default_tools(self):
+        """Регистрация стандартных инструментов"""
+        self.register("docker", safe_docker_exec)
+        self.register("gitlab", gitlab_api_call)
+        self.register("qdrant_search", qdrant_search_wrapper)
+        self.register("neo4j_query", neo4j_query_wrapper)
+    
+    def register(self, name: str, fn: Callable):
+        """Регистрация инструмента"""
+        self.tools[name] = fn
+        logger.debug(f"Registered tool: {name}")
+    
+    def get(self, name: str) -> Callable:
+        """Получение инструмента по имени"""
+        if name not in self.tools:
+            raise ValueError(f"Unknown tool: {name}. Available: {list(self.tools.keys())}")
+        return self.tools[name]
+    
+    def exists(self, name: str) -> bool:
+        """Проверка существования инструмента"""
+        return name in self.tools
+    
+    def list_tools(self) -> list:
+        """Список всех зарегистрированных инструментов"""
+        return list(self.tools.keys())
+
+
+# Wrapper функции для registry
+async def qdrant_search_wrapper(params: dict) -> dict:
+    """Wrapper для qdrant_search"""
+    return await qdrant_search(**params)
+
+async def neo4j_query_wrapper(params: dict) -> dict:
+    """Wrapper для neo4j_query"""
+    return await neo4j_query(**params)
 
 # === Qdrant ===
 
@@ -34,7 +82,7 @@ async def qdrant_search(
     model = SentenceTransformer("BAAI/bge-m3", cache_folder="/models")
     dense_vec = model.encode(query, normalize_embeddings=True).tolist()
     
-    async with AsyncQdrantClient(url=QDRANT_URL) as client:
+    async with managed_qdrant_client(QDRANT_URL) as client:
         # Hybrid search
         results = await client.search(
             collection_name="devops_errors",
@@ -200,39 +248,57 @@ async def gitlab_api_call(action: GitLabAction) -> ExecutionResult:
 # === Safe Shell (read-only only) ===
 
 async def safe_shell_exec(command: str, timeout: int = 30) -> ExecutionResult:
-    """Выполнение shell-команд с ограничениями (только read-only)"""
-    allowed_prefixes = [
-        "cat ", "ls ", "df ", "du ", "grep ", "find ", 
-        "docker logs", "docker inspect", "docker stats",
-        "journalctl ", "systemctl status ", "ps ", "top -b"
-    ]
-    
-    if not any(command.startswith(p) for p in allowed_prefixes):
-        return ExecutionResult(
-            error=f"Command not allowed in autonomous mode: {command}",
-            exit_code=-1,
-            command=command
-        )
+    """✅ БЕЗОПАСНО: subprocess_exec + shlex + strict allowlist"""
+    from agent.shared.docker_commands import AllowedShellCommand
     
     try:
-        proc = await asyncio.create_subprocess_shell(
-            f"timeout {timeout}s {command}",
+        # Парсим команду с учётом кавычек и экранирования
+        args = shlex.split(command)
+        if not args:
+            return ExecutionResult(error="Empty command", success=False)
+        
+        cmd_name = args[0]
+        
+        # Строгая проверка по allowlist (не startsWith!)
+        if cmd_name not in set(c.value for c in AllowedShellCommand):
+            return ExecutionResult(
+                error=f"Command '{cmd_name}' not in allowlist", 
+                success=False
+            )
+        
+        # Дополнительная защита: блокируем опасные аргументы
+        dangerous_patterns = [';', '|', '&', '`', '$', '(', ')', '{', '}', '<', '>', '\n', '\r']
+        for arg in args:
+            if any(pattern in arg for pattern in dangerous_patterns):
+                return ExecutionResult(
+                    error=f"Argument contains dangerous pattern: {arg}",
+                    success=False
+                )
+        
+        # Формируем команду с timeout БЕЗ shell=True
+        # timeout — отдельная команда, а не часть строки
+        full_cmd = ["timeout", str(timeout)] + args
+        
+        proc = await asyncio.create_subprocess_exec(
+            *full_cmd,  # ✅ list-аргументы, shell=False по умолчанию
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            limit=1024*1024  # 1MB buffer limit
+            limit=4096
         )
-        
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout + 5)
+        stdout, stderr = await proc.communicate()
         
         return ExecutionResult(
-            stdout=stdout.decode()[:10000],
-            stderr=stderr.decode()[:10000],
-            exit_code=proc.returncode,
-            command=command,
-            timestamp=datetime.utcnow().isoformat()
+            output=stdout.decode(errors='replace') if stdout else "",
+            error=stderr.decode(errors='replace') if stderr else "",
+            success=proc.returncode == 0,
+            returncode=proc.returncode
         )
+    except FileNotFoundError as e:
+        return ExecutionResult(error=f"Command not found: {cmd_name}", success=False)
+    except asyncio.TimeoutError:
+        return ExecutionResult(error=f"Command timed out after {timeout}s", success=False)
     except Exception as e:
-        return ExecutionResult(error=str(e), exit_code=-1, command=command)
+        return ExecutionResult(error=f"Execution error: {type(e).__name__}: {e}", success=False)
 
 # === Validation Helpers ===
 

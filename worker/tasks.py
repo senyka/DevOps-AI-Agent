@@ -1,11 +1,12 @@
 # worker/tasks.py
-import os, json, logging, asyncio
+import os, json, logging
 from typing import Optional
 from celery import Celery
 from datetime import datetime, timedelta
 
 from agent.memory import init_stores, search_error_cases, update_knowledge_graph
 from agent.llm import call_vllm
+from agent.utils import safe_async_call
 
 logger = logging.getLogger(__name__)
 
@@ -42,8 +43,10 @@ def consolidate_memory(self, audit_id: str = None, since: str = "24h"):
             pattern = extract_pattern_via_llm(case)
             if pattern:
                 patterns.append(pattern)
-                # Обновляем граф знаний
-                asyncio.run(update_knowledge_graph(
+                # Обновляем граф знаний с использованием event loop
+                import asyncio
+                loop = asyncio.get_event_loop()
+                loop.run_until_complete(update_knowledge_graph(
                     error_sig=case["signature"],
                     fix_steps=pattern["steps"],
                     root_cause=pattern.get("root_cause")
@@ -140,6 +143,8 @@ def fetch_new_cases(cutoff: datetime, status: str = "success") -> list:
 
 def extract_pattern_via_llm(case: dict) -> Optional[dict]:
     """Извлечение паттерна через LLM (root cause + универсальные шаги)"""
+    import asyncio
+    
     prompt = f"""
     Проанализируй успешное исправление ошибки и выдели универсальный паттерн.
     
@@ -156,7 +161,11 @@ def extract_pattern_via_llm(case: dict) -> Optional[dict]:
     }}
     """
     
-    response = asyncio.run(call_vllm(prompt, temperature=0.0, response_format={"type": "json_object"}))
+    # Используем get_event_loop вместо asyncio.run для совместимости с Celery
+    loop = asyncio.get_event_loop()
+    response = loop.run_until_complete(
+        call_vllm(prompt, temperature=0.0, response_format={"type": "json_object"})
+    )
     return json.loads(response) if response else None
 
 def generate_lora_dataset(patterns: list) -> str:
