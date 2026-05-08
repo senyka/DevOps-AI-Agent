@@ -727,7 +727,8 @@ memory_consolidation_last_timestamp
 ### Готовый дашборд Grafana
 Импорт: `monitoring/dashboards/devops-agent.json`
 
-![Дашборд: ключевые метрики](./monitoring/dashboards/devops-agent.json)
+[Дашборд: ключевые метрики](./monitoring/dashboards/devops-agent.json)
+
 *(визуализация: VRAM, confidence trend, top errors, LoRA version)*
 
 ### Логи
