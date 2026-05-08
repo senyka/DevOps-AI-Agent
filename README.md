@@ -31,9 +31,9 @@
 13. [Лицензия](#-лицензия)
 
 ---
-
-
-# 🏗️ Схема архитектуры DevOps-AI-Agent
+# 🏗️ Архитектура
+![shema](/img/shema.png)
+# 🏗️ Схема архитектуры 
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#1a1a2e', 'primaryTextColor': '#fff', 'primaryBorderColor': '#4a4a6a', 'lineColor': '#6a6a9a', 'secondaryColor': '#16213e', 'tertiaryColor': '#0f3460' }}}%%
