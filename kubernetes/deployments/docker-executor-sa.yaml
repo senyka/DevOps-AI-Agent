@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: docker-executor-sa
+  namespace: devops-agent
+  labels:
+    app: docker-executor
