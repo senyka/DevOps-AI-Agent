@@ -40,7 +40,9 @@
 
 ![shema](/img/shema.png)
 
-# 🏗️ Схема архитектуры
+## 🏗️ Схема архитектуры
+
+### Высокоуровневая архитектура системы
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#1a1a2e', 'primaryTextColor': '#fff', 'primaryBorderColor': '#4a4a6a', 'lineColor': '#6a6a9a', 'secondaryColor': '#16213e', 'tertiaryColor': '#0f3460' }}}%%
@@ -50,18 +52,21 @@ graph TB
     subgraph UserLayer ["👤 Пользовательский слой"]
         CLI["💻 CLI / API<br/>(ask, fix, memory)"]
         WebUI["🌐 Web UI<br/>(опционально)"]
+        GitLabHook["🔗 GitLab Webhook<br/>(auto-triggers)"]
     end
 
     %% ==================== ЯДРО АГЕНТА ====================
     subgraph AgentCore ["🤖 Ядро AI-агента (agent/)"]
         direction TB
 
-        Main["📄 main.py<br/>Точка входа"]
-        Graph["📄 graph.py<br/>LangGraph State Machine"]
-        LLM["📄 llm.py<br/>LLM Provider<br/>(OpenAI / vLLM)"]
-        Memory["📄 memory.py<br/>Hybrid Memory"]
-        Tools["📄 tools.py<br/>DevOps Tools"]
-        Schemas["📄 schemas.py<br/>Pydantic Models"]
+        Main["📄 main.py<br/>FastAPI + CLI Entry Point"]
+        Graph["📄 graph.py<br/>LangGraph State Machine<br/>Reason→Verify→Execute"]
+        LLM["📄 llm.py<br/>LLM Provider<br/>(vLLM + Qwen2.5-14B)"]
+        Memory["📄 memory.py<br/>Hybrid Memory Manager"]
+        Tools["📄 tools.py<br/>Tool Registry + Execution"]
+        Schemas["📄 schemas.py<br/>Pydantic v2 Models"]
+        Config["📄 config.py<br/>pydantic-settings"]
+        Utils["📄 utils.py<br/>Resource Managers"]
 
         Main --> Graph
         Graph --> LLM
@@ -69,43 +74,44 @@ graph TB
         Graph --> Tools
         Graph --> Schemas
 
-        subgraph CLI_Module ["📁 cli/"]
-            Ask["ask.py"]
-            Fix["fix.py"]
-            MemCtrl["memory.py"]
-        end
-
-        subgraph Security ["🔐 security/"]
+        subgraph Security ["🔐 security/ - Zero-Trust Layer"]
             Approval["approval.py<br/>Human-in-the-Loop"]
             DockerVal["docker_validator.py<br/>Command Allowlist"]
             CypherSan["cypher_sanitizer.py<br/>Query Sanitization"]
             Secrets["secrets.py<br/>Secrets Management"]
-            AuditLog["logging.py<br/>Masked Audit"]
+            AuditLog["logging.py<br/>Masked Audit Logs"]
+            Guardrails["🛡️ NeMo Guardrails"]
+        end
+
+        subgraph Shared ["📦 shared/ - Common Utilities"]
+            DockerCmds["docker_commands.py<br/>Unified Command Enum"]
         end
     end
 
     %% ==================== ИЗОЛИРОВАННЫЙ ИСПОЛНИТЕЛЬ ====================
-    subgraph Executor ["🐳 docker-executor/ (Isolated)"]
-        ExecAPI["📄 app.py<br/>FastAPI HTTP Endpoint"]
-        ExecDocker["🐳 Docker CLI<br/>subprocess execution"]
-        ExecVal["✅ Input Validation<br/>Allowlist Check"]
+    subgraph Executor ["🐳 docker-executor/ (Isolated Sandbox)"]
+        ExecAPI["📄 app.py<br/>FastAPI HTTP Gateway"]
+        ExecVal["✅ Validation Layer<br/>Allowlist + Injection Check"]
+        ExecDocker["🐳 Docker SDK<br/>subprocess_exec (no shell!)"]
+        SecOpts["🔒 Security Options<br/>read_only, no-new-privileges"]
 
         ExecAPI --> ExecVal
         ExecVal --> ExecDocker
+        ExecDocker --> SecOpts
     end
 
     %% ==================== ХРАНИЛИЩА ДАННЫХ ====================
     subgraph DataLayer ["💾 Data Layer"]
-        Neo4j[("🕸️ Neo4j<br/>Graph Memory<br/>- Incidents<br/>- Actions<br/>- Audit Trail")]
-        Qdrant[("🎯 Qdrant<br/>Vector Store<br/>- Embeddings<br/>- Semantic Search")]
-        Postgres[("🗄️ PostgreSQL<br/>Relational State<br/>- Users<br/>- Configs")]
+        Neo4j[("🕸️ Neo4j<br/>Graph Memory<br/>- Incidents<br/>- RootCause Maps<br/>- Audit Trail")]
+        Qdrant[("🎯 Qdrant<br/>Vector Store<br/>- bge-m3 Embeddings<br/>- Semantic Search<br/>- RAG Context")]
+        Postgres[("🗄️ PostgreSQL 16<br/>Relational State<br/>- pgvector<br/>- Checkpoints<br/>- Users")]
 
-        LoRA["📁 lora_adapters/<br/>devops_v1/<br/>Domain Fine-tuning"]
+        LoRA["📁 lora_adapters/<br/>devops_v1/<br/>Domain Fine-tuning<br/>(Unsloth + TRL)"]
     end
 
     %% ==================== ВНЕШНИЕ СИСТЕМЫ ====================
     subgraph External ["🌍 External Systems"]
-        GitLab["🔗 GitLab API<br/>(Issues, MR, CI)"]
+        GitLab["🔗 GitLab API<br/>(Issues, MR, CI/CD)"]
         K8s["☸️ Kubernetes API<br/>(pods, logs, events)"]
         DockerReg["📦 Docker Registry<br/>(images, tags)"]
         WebAPI["🌐 Web APIs<br/>(docs, status pages)"]
@@ -113,16 +119,18 @@ graph TB
     end
 
     %% ==================== МОНАРИНГ И БЕЗОПАСНОСТЬ ====================
-    subgraph Observability ["📊 Observability"]
-        Grafana["📈 Grafana Dashboards"]
+    subgraph Observability ["📊 Observability & Safety"]
+        Grafana["📈 Grafana Dashboards<br/>latency, errors, approvals"]
         Logs["📋 Structured Logs<br/>(audit.jsonl)"]
-        Guardrails["🛡️ NeMo Guardrails<br/>Prompt Injection Protection"]
+        Health["🏥 Health Checks<br/>/health endpoint"]
+        Metrics["📊 Prometheus Metrics"]
     end
 
     %% ==================== ПОТОКИ ДАННЫХ ====================
     %% Пользователь → Агент
     CLI --> Main
     WebUI --> Main
+    GitLabHook --> Main
 
     %% Агент → Безопасность
     Tools --> Approval
@@ -141,8 +149,9 @@ graph TB
     Tools --> WebAPI
 
     %% Безопасность → Исполнитель
-    DockerVal --> ExecAPI
+    DockerVal --> ExecVal
     CypherSan --> Neo4j
+    DockerCmds -.-> DockerVal
     Secrets -.-> ExecAPI
 
     %% Исполнитель → Внешние
@@ -154,6 +163,8 @@ graph TB
     Logs --> Grafana
     Guardrails --> LLM
     Guardrails --> Tools
+    Health --> Grafana
+    Metrics --> Grafana
 
     %% LoRA
     LLM -.->|Load Adapter| LoRA
@@ -165,13 +176,15 @@ graph TB
     classDef dataLayer fill:#192a56,stroke:#3c6382,color:#fff
     classDef external fill:#3d3d3d,stroke:#707070,color:#fff,dashed
     classDef observability fill:#2c2c54,stroke:#474787,color:#fff
+    classDef security fill:#c0392b,stroke:#e74c3c,color:#fff
 
-    class CLI,WebUI userLayer
-    class Main,Graph,LLM,Memory,Tools,Schemas,CLI_Module,Security agentCore
-    class ExecAPI,ExecDocker,ExecVal executor
+    class CLI,WebUI,GitLabHook userLayer
+    class Main,Graph,LLM,Memory,Tools,Schemas,Config,Utils,Security,Shared agentCore
+    class ExecAPI,ExecVal,ExecDocker,SecOpts executor
     class Neo4j,Qdrant,Postgres,LoRA dataLayer
     class GitLab,K8s,DockerReg,WebAPI,Slack external
-    class Grafana,Logs,Guardrails observability
+    class Grafana,Logs,Health,Metrics observability
+    class Approval,DockerVal,CypherSan,Secrets,AuditLog,Guardrails security
 ```
 
 ---
@@ -187,42 +200,116 @@ graph TB
 | **🧵 Асинхронная архитектура** | Параллельное выполнение инструментов | `asyncio.create_subprocess_exec()` + `asyncio.gather()` |
 | **📦 Tool Registry** | Предотвращение вызова несуществующих инструментов | `ToolRegistry` класс с проверкой существования перед вызовом |
 | **♻️ Resource Management** | Корректное закрытие подключений к БД | Контекстные менеджеры для Qdrant, Neo4j, PostgreSQL |
+| **🔄 Reason/Verify/Execute Split** | Разделение ответственности узлов графа | `reason_node` → `verify_node` → `exec_node` → `verify_execution_node` |
+| **🏥 Health Checks** | Мониторинг доступности всех сервисов | `/health` endpoint + docker-compose healthcheck |
 
 ---
 
 ## 🔄 Последовательность обработки запроса
 
+### Детальная последовательность выполнения запроса
+
 ```mermaid
 sequenceDiagram
+    autonumber
     participant U as 👤 Пользователь
-    participant C as 💻 CLI
-    participant A as 🤖 Agent Core
-    participant S as 🔐 Security
+    participant C as 💻 CLI/API
+    participant G as 📄 graph.py
+    participant R as 🧠 reason_node
+    participant V as 🔐 verify_node
+    participant M as 💾 Memory
+    participant L as 🤖 LLM
+    participant T as 🛠️ Tools
+    participant S as 🔒 Security
     participant E as 🐳 Executor
-    participant D as 💾 Data Layer
     participant X as 🌍 External
 
+    rect rgb(200, 220, 255)
+    note over U,C: 1️⃣ Инициализация запроса
     U->>C: ask "почему упал pod frontend?"
-    C->>A: main.py: initialize State
-    A->>A: graph.py: parse_intent()
-    A->>D: memory.py: retrieve_context(Neo4j+Qdrant)
-    D-->>A: возвращает связанные инциденты + docs
-    A->>A: llm.py: generate_plan(tools=[k8s_logs, k8s_events])
-    A->>S: security/approval.py: check_action(k8s_logs)
-    S-->>A: ✅ auto-approve (read-only)
-    A->>E: POST /execute {"cmd": "kubectl logs..."}
-    E->>E: docker_validator.py: allowlist_check()
+    C->>G: create_initial_state(query, session_id)
+    activate G
+    end
+
+    rect rgb(220, 255, 220)
+    note over G,R: 2️⃣ Reasoning фаза
+    G->>R: process(state)
+    activate R
+    R->>M: retrieve_context(session_id, query)
+    activate M
+    M-->>R: incidents + embeddings (Neo4j+Qdrant)
+    deactivate M
+    R->>L: generate_intention(context, tools_list)
+    activate L
+    L-->>R: intention: "check k8s logs"
+    deactivate L
+    R-->>G: state.intention = {...}
+    deactivate R
+    end
+
+    rect rgb(255, 240, 200)
+    note over G,V: 3️⃣ Verification фаза
+    G->>V: verify_node(state)
+    activate V
+    V->>S: check_action(intention.tool)
+    activate S
+    S->>S: allowlist_check(k8s_logs)
+    S-->>V: ✅ auto-approve (read-only)
+    deactivate S
+    V-->>G: state.verified = true
+    deactivate V
+    end
+
+    rect rgb(255, 220, 220)
+    note over G,T,E: 4️⃣ Execution фаза
+    G->>T: exec_node(state)
+    activate T
+    T->>E: POST /execute {cmd: "kubectl logs..."}
+    activate E
+    E->>E: validate_image() + sanitize_cmd()
     E->>X: kubectl → Kubernetes API
-    X-->>E: возвращает логи
-    E-->>A: HTTP 200 + output
-    A->>A: graph.py: analyze_result()
-    A->>S: audit_log(action, params, result)
-    S->>D: Neo4j: CREATE (:Audit {timestamp, ...})
-    A->>C: format_response("Pod упал из-за OOM...")
-    C-->>U: показывает ответ + рекомендации
+    activate X
+    X-->>E: logs output
+    deactivate X
+    E-->>T: HTTP 200 + result
+    deactivate E
+    T-->>G: state.result = {...}
+    deactivate T
+    end
+
+    rect rgb(240, 220, 255)
+    note over G,S,M: 5️⃣ Post-execution & Audit
+    G->>S: audit_log(action, params, result)
+    activate S
+    S->>M: Neo4j CREATE (:Audit {...})
+    activate M
+    M-->>S: ✅ logged
+    deactivate M
+    S-->>G: audit_id
+    deactivate S
+
+    G->>G: analyze_result(state)
+    G-->>C: format_response("Pod упал из-за OOM...")
+    deactivate G
+    end
+
+    C-->>U: 📝 Ответ + рекомендации
+    note right of U: 💡 Предложить fix?
 ```
 
 ---
+
+### Фазы обработки запроса
+
+| Фаза | Узел графа | Действие | Безопасность |
+|------|-----------|----------|--------------|
+| **1️⃣ Init** | `input_node` | Парсинг запроса, создание State | Валидация Pydantic схем |
+| **2️⃣ Reason** | `reason_node` | Анализ контекста, генерация намерения | Tool Registry проверка |
+| **3️⃣ Verify** | `verify_node` | Проверка безопасности намерения | Allowlist + Approval System |
+| **4️⃣ Execute** | `exec_node` | Выполнение через docker-executor | subprocess_exec (no shell!) |
+| **5️⃣ Verify Exec** | `verify_execution_node` | Валидация результатов | Детекция аномалий |
+| **6️⃣ Plan** | `plan_node` | Генерация следующего шага | Циклическая проверка |
+| **7️⃣ Audit** | `audit_node` | Логирование в Neo4j | Masked secrets |
 
 ### Ключевые компоненты
 
