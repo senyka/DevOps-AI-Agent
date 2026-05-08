@@ -99,8 +99,15 @@ def parse_docker_command(cmd_str: str) -> Tuple[bool, str, List[str]]:
         if arg in FORBIDDEN_FLAGS:
             return False, f"Flag '{arg}' is forbidden", []
         # Проверка на injection в аргументах
-        if re.search(r'[;&|`$(){}<>\\]', arg):
-            return False, f"Argument contains dangerous characters: {arg}", []
+        # Разрешаем фигурные скобки для Docker format-строк ({{.Names}})
+        # Но блокируем опасные shell-символы
+        dangerous_patterns = [';', '|', '&', '`', '$', '(', ')', '<', '>', '\\']
+        for pattern in dangerous_patterns:
+            if pattern in arg:
+                # Исключение: разрешаем $VAR для переменных окружения в кавычках
+                if pattern == '$' and re.match(r"^'[a-zA-Z_][a-zA-Z0-9_]*'$", arg):
+                    continue
+                return False, f"Argument contains dangerous characters: {arg}", []
     
     return True, "OK", args
 
