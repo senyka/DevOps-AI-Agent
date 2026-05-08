@@ -1,1 +1,56 @@
-Nothing should be ignored in this case, as the changes only include source code files (.py) and a markdown file (.md) without any build artifacts, dependencies, or temporary files.
+```yaml
+# Kubernetes related configurations and secrets
+kubernetes/configmaps/*.yaml
+kubernetes/deployments/*.yaml
+kubernetes/networkpolicies/*.yaml
+kubernetes/secrets/*.yaml
+kubernetes/services/*.yaml
+kubernetes/vault/*.yaml
+kubernetes/namespaces/*.yaml
+
+# Ignore kubectl applied resources backup
+*.bak
+*.backup
+*.original
+
+# Temporary and log files
+*.tmp
+*.log
+*.swp
+*~
+
+# Environment specific files
+.env
+.env.local
+.env.*
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Build and dependency directories
+node_modules/
+build/
+dist/
+target/
+bin/
+
+# Python specific
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.coverage
+htmlcov/
+.coverage.*
+.pytest_cache/
+.mypy_cache/
+```
