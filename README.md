@@ -40,9 +40,7 @@
 
 ![shema](/img/shema.png)
 
-## 🏗️ Схема архитектуры
-
-### Высокоуровневая архитектура системы
+## 🏗️ Высокоуровневая архитектура системы
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#1a1a2e', 'primaryTextColor': '#fff', 'primaryBorderColor': '#4a4a6a', 'lineColor': '#6a6a9a', 'secondaryColor': '#16213e', 'tertiaryColor': '#0f3460' }}}%%
