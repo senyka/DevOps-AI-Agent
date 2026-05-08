@@ -1,0 +1,211 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: vault
+  labels:
+    name: vault
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vault
+  namespace: vault
+  labels:
+    app.kubernetes.io/name: vault
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vault
+  namespace: vault
+  labels:
+    app.kubernetes.io/name: vault
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+    - name: http
+      port: 8200
+      targetPort: 8200
+    - name: internal
+      port: 8201
+      targetPort: 8201
+  selector:
+    app.kubernetes.io/name: vault
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: vault
+  namespace: vault
+  labels:
+    app.kubernetes.io/name: vault
+spec:
+  serviceName: vault
+  podManagementPolicy: Parallel
+  replicas: 3
+  updateStrategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: vault
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: vault
+    spec:
+      serviceAccountName: vault
+      securityContext:
+        fsGroup: 1000
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app.kubernetes.io/name
+                    operator: In
+                    values:
+                      - vault
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - name: vault
+          image: hashicorp/vault:1.15.4
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -c
+            - |
+              cp /vault/config/raft.hcl /vault/config/raft.json
+              sed -i "s/HOSTNAME/${HOSTNAME}/g" /vault/config/raft.json
+              vault server -config=/vault/config/raft.json
+          env:
+            - name: HOSTNAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: VAULT_ADDR
+              value: "https://127.0.0.1:8200"
+            - name: VAULT_API_ADDR
+              value: "https://$(HOSTNAME).vault.vault.svc.cluster.local:8201"
+            - name: SKIP_SETCAP
+              value: "true"
+          ports:
+            - name: http
+              containerPort: 8200
+              protocol: TCP
+            - name: https
+              containerPort: 8201
+              protocol: TCP
+            - name: raft
+              containerPort: 8202
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /v1/sys/health
+              port: 8200
+              scheme: HTTPS
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /v1/sys/health
+              port: 8200
+              scheme: HTTPS
+            initialDelaySeconds: 60
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+          volumeMounts:
+            - name: config
+              mountPath: /vault/config
+            - name: data
+              mountPath: /vault/data
+            - name: tls
+              mountPath: /vault/tls
+              readOnly: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            runAsNonRoot: true
+            runAsUser: 1000
+      volumes:
+        - name: config
+          configMap:
+            name: vault-config
+        - name: tls
+          secret:
+            secretName: vault-tls
+            optional: true
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 10Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vault-config
+  namespace: vault
+data:
+  raft.hcl: |
+    ui = true
+    listener "tcp" {
+      address = "0.0.0.0:8200"
+      cluster_address = "0.0.0.0:8201"
+      tls_disable = false
+      tls_cert_file = "/vault/tls/tls.crt"
+      tls_key_file = "/vault/tls/tls.key"
+    }
+    storage "raft" {
+      path = "/vault/data"
+      node_id = "HOSTNAME"
+      retry_join {
+        leader_api_addr = "https://vault-0.vault.vault.svc.cluster.local:8201"
+      }
+      retry_join {
+        leader_api_addr = "https://vault-1.vault.vault.svc.cluster.local:8201"
+      }
+      retry_join {
+        leader_api_addr = "https://vault-2.vault.vault.svc.cluster.local:8201"
+      }
+    }
+    service_registration "kubernetes" {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vault-active
+  namespace: vault
+  labels:
+    app.kubernetes.io/name: vault
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8200
+      targetPort: 8200
+  selector:
+    app.kubernetes.io/name: vault
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: vault-pdb
+  namespace: vault
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: vault
