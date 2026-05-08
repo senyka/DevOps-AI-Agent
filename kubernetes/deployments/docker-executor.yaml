@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: docker-executor
+  namespace: devops-agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: docker-executor
+      mtls-enabled: "true"
+  template:
+    metadata:
+      labels:
+        app: docker-executor
+        mtls-enabled: "true"
+    spec:
+      serviceAccountName: docker-executor-sa
+      containers:
+        - name: docker-executor
+          image: devops-docker-executor:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 5001
+              name: http
+          env:
+            - name: ALLOWED_COMMANDS
+              value: "ps,logs,inspect,version,info"
+          volumeMounts:
+            - name: docker-socket
+              mountPath: /var/run/docker.sock
+              readOnly: true
+            - name: tls-certs
+              mountPath: /etc/tls
+              readOnly: true
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - NET_BIND_SERVICE
+      volumes:
+        - name: docker-socket
+          hostPath:
+            path: /var/run/docker.sock
+            type: Socket
+        - name: tls-certs
+          secret:
+            secretName: docker-executor-tls-secret
+            optional: true
