@@ -4,6 +4,7 @@
 Использует общий модуль docker_commands для централизованной конфигурации.
 """
 from typing import Set, List
+from enum import Enum
 import re
 
 from agent.shared.docker_commands import (

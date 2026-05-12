@@ -4,6 +4,7 @@ import re
 import json
 import asyncio
 import logging
+import shlex
 from typing import Optional, Union, Callable, Dict
 
 import httpx
@@ -97,7 +98,8 @@ async def qdrant_search(
             with_payload=True
         )
 
-        return [
+        # Filter results by score (additional safety check)
+        cleaned = [
             {
                 "id": r.id,
                 "score": r.score,
@@ -107,7 +109,10 @@ async def qdrant_search(
                 "timestamp": r.payload.get("created_at")
             }
             for r in results
+            if r.score is not None and r.score >= score_threshold
         ]
+
+        return cleaned or []
 
 # === Neo4j ===
 
@@ -120,6 +125,10 @@ async def neo4j_query(cypher: str, params: Optional[dict] = None) -> list[dict]:
     if not is_safe:
         logger.warning(f"Cypher query blocked: {error_msg}")
         raise ValueError(f"Unsafe Cypher query: {error_msg}")
+
+    # Additional regex-based validation for forbidden characters
+    if not re.match(r"^[A-Za-z0-9_().,:{} \n\r\t\-\[\]\"'*]+$", cypher):
+        raise ValueError("Cypher query contains forbidden characters")
 
     # Валидация параметров
     if params:
@@ -134,9 +143,8 @@ async def neo4j_query(cypher: str, params: Optional[dict] = None) -> list[dict]:
         NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASS)
     ) as driver:
         async with driver.session() as session:
-            result = await session.run(cypher, parameters=params or {})
-            records = await result.data()
-            return [dict(r) for r in records]
+            response = await session.run(cypher, parameters=params or {})
+            return [r.data() for r in await response.data()]
 
 # === Docker Exec (sandboxed) ===
 
@@ -154,14 +162,25 @@ async def safe_docker_exec(cmd: DockerCommand) -> ExecutionResult:
                 timestamp=datetime.utcnow().isoformat()
             )
 
+        # EXTRA: validate CLI injection attempts
+        forbidden = [";", "&&", "||", "`", "$(", "|"]
+        if any(token in cmd.command for token in forbidden):
+            raise ValueError(f"Potential shell-injection found in command: {cmd.command}")
+
         # Санитизация имени контейнера
         safe_container = sanitize_container_name(cmd.container)
+
+        # Parse command with shlex for safe argument splitting
+        try:
+            command_parts = shlex.split(cmd.command)
+        except Exception as e:
+            raise ValueError(f"Invalid docker command format: {e}")
 
         # Отправка команды в docker-executor сервис
         async with httpx.AsyncClient(timeout=cmd.timeout + 30) as client:
             payload = {
-                "command": f"docker {cmd.command}",
-                "timeout": cmd.timeout
+                "command_parts": ["docker"] + command_parts,
+                "timeout": cmd.timeout,
             }
             resp = await client.post(
                 f"{DOCKER_EXECUTOR_URL}/exec",
