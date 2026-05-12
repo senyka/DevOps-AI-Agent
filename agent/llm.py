@@ -43,31 +43,18 @@ async def call_vllm(
     if lora_adapter:
         payload["extra_body"] = {"lora_name": lora_adapter}
     
-    max_retries = 3
-    backoff = 1
-    
     async with httpx.AsyncClient(timeout=120) as client:
-        for attempt in range(max_retries):
-            try:
-                resp = await client.post(
-                    f"{VLLM_BASE}/chat/completions",
-                    headers={"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"},
-                    json=payload
-                )
-                resp.raise_for_status()
-                data = resp.json()
-                
-                content = data["choices"][0]["message"]["content"]
-                logger.debug(f"LLM response ({len(content)} chars): {content[:200]}...")
-                return content
-            except httpx.RequestError as e:
-                logger.error(f"VLLM network error: {e}. Attempt {attempt+1}/{max_retries}")
-            except httpx.HTTPStatusError as e:
-                logger.error(f"VLLM returned HTTP error: {e.response.text}")
-                raise
-            await asyncio.sleep(backoff)
-            backoff *= 2
-        raise RuntimeError("VLLM API unreachable after retries")
+        resp = await client.post(
+            f"{VLLM_BASE}/chat/completions",
+            headers={"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"},
+            json=payload
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        
+        content = data["choices"][0]["message"]["content"]
+        logger.debug(f"LLM response ({len(content)} chars): {content[:200]}...")
+        return content
 
 async def call_vllm_with_tools(
     prompt: str,
