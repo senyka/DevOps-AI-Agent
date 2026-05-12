@@ -3,6 +3,7 @@ import os, logging, asyncio, uuid, hashlib, time
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from prometheus_client import make_asgi_app, Counter, Histogram
 import httpx
 
@@ -154,6 +155,15 @@ def run_cli():
 
 if __name__ == "__main__":
     run_cli()
+
+# === Global Exception Handler ===
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    logger.error(f"Unhandled error: {exc}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error", "error": str(exc)}
+    )
 
 # === Helper functions ===
 async def check_vllm() -> bool:
