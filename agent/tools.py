@@ -1,13 +1,18 @@
 # agent/tools.py
-import os, re, json, asyncio, logging
+import os
+import re
+import json
+import asyncio
+import logging
 from typing import Optional, Union, Callable, Dict
-from pydantic import BaseModel, Field, validator
-import httpx, asyncpg
+
+import httpx
+import asyncpg
 from datetime import datetime
-import shlex
 
 from agent.schemas import DockerCommand, GitLabAction, ExecutionResult
 from agent.security.docker_validator import validate_docker_command, sanitize_container_name
+
 from agent.utils import managed_qdrant_client
 from agent.shared.docker_commands import parse_docker_command as parse_docker_cmd_shared
 
