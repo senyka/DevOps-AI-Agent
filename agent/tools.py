@@ -127,7 +127,8 @@ async def neo4j_query(cypher: str, params: Optional[dict] = None) -> list[dict]:
         raise ValueError(f"Unsafe Cypher query: {error_msg}")
 
     # Additional regex-based validation for forbidden characters
-    if not re.match(r"^[A-Za-z0-9_().,:{} \n\r\t\-\[\]\"'*]+$", cypher):
+    # Allow $ for parameterized queries, = for comparisons, and other safe chars
+    if not re.match(r"^[A-Za-z0-9_().,:{} \n\r\t\-=\[\]\"'$*]+$", cypher):
         raise ValueError("Cypher query contains forbidden characters")
 
     # Валидация параметров
